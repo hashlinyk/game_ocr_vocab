@@ -29,6 +29,7 @@ class WordRow(QWidget):
         layout.setContentsMargins(8, 4, 8, 4)
 
         left = QVBoxLayout()
+        left.setSpacing(10)  # 单词行与释义的间距
         top = QHBoxLayout()
         word_label = QLabel(entry.word)
         word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
@@ -68,6 +69,7 @@ class VocabRow(QWidget):
         self.canonical = word
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 3, 8, 3)
+        layout.setSpacing(12)  # 单词与释义的水平间距
         wl = QLabel(word)
         wl.setStyleSheet("font-weight: bold; font-size: 18px;")
         tl = QLabel(translation)
