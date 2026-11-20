@@ -1,6 +1,6 @@
 """主窗口：三标签页（识别词流 / 已掌握 / 生词本）+ 区域控制 + 状态提示。"""
 
-from PySide6.QtCore import QSize, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -15,8 +15,6 @@ from PySide6.QtWidgets import (
 )
 
 from .dictionary import Dictionary, WordEntry
-
-ROW_H = 62  # 单词行统一高度
 
 
 class WordRow(QWidget):
@@ -39,18 +37,23 @@ class WordRow(QWidget):
         top.addStretch()
         left.addLayout(top)
         trans = QLabel(entry.translation)
-        trans.setWordWrap(False)
+        trans.setWordWrap(True)
         trans.setToolTip(entry.translation_full)
         trans.setStyleSheet("color: #1a1a1a; font-size: 14px;")
         left.addWidget(trans)
         layout.addLayout(left, 1)
 
+        # 按钮固定贴顶：与单词首行对齐，不随释义行数垂直居中
+        btn_box = QWidget()
+        btn_lay = QHBoxLayout(btn_box)
+        btn_lay.setContentsMargins(0, 0, 0, 0)
+        btn_lay.setSpacing(6)
         for text, cb in (("掌握", on_mastered), ("生词本", on_vocab), ("发音", on_speak)):
             btn = QPushButton(text)
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _=False, c=entry.canonical, f=cb: f(c))
-            layout.addWidget(btn)
-        self.setFixedHeight(ROW_H)
+            btn_lay.addWidget(btn)
+        layout.addWidget(btn_box, 0, Qt.AlignTop)
 
 
 class VocabRow(QWidget):
@@ -65,7 +68,7 @@ class VocabRow(QWidget):
         wl.setStyleSheet("font-weight: bold; font-size: 18px;")
         tl = QLabel(translation)
         tl.setStyleSheet("color: #555555; font-size: 14px;")
-        tl.setWordWrap(False)
+        tl.setWordWrap(True)
         tl.setToolTip(translation)
         layout.addWidget(wl)
         layout.addWidget(tl, 1)
@@ -76,7 +79,6 @@ class VocabRow(QWidget):
         for b in (mv, rm):
             b.setCursor(Qt.PointingHandCursor)
             layout.addWidget(b)
-        self.setFixedHeight(ROW_H)
 
 
 class MainWindow(QMainWindow):
@@ -181,7 +183,7 @@ class MainWindow(QMainWindow):
                 on_speak=self.tts.speak,
             )
             item = QListWidgetItem()
-            item.setSizeHint(QSize(10, ROW_H))
+            item.setSizeHint(row.sizeHint())
             self.list.addItem(item)
             self.list.setItemWidget(item, row)
         self.list.scrollToBottom()
@@ -233,7 +235,7 @@ class MainWindow(QMainWindow):
                 on_remove=self._remove_word,
             )
             item = QListWidgetItem()
-            item.setSizeHint(QSize(10, ROW_H))
+            item.setSizeHint(row.sizeHint())
             lw.addItem(item)
             lw.setItemWidget(item, row)
 
