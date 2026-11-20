@@ -64,14 +64,17 @@ class Dictionary:
             raw = self._raw(candidate)
             if raw and (raw[2].strip() or raw[3].strip()):
                 _, phonetic, translation, definition, _ = raw
-                lines = [ln.strip() for ln in translation.split("\n") if ln.strip()]
-                first = lines[0] if lines else (definition[:80] or "")
+                # ECDICT 部分条目的换行是字面 "\n" 文本，先归一为真实换行
+                trans_clean = translation.replace("\\n", "\n")
+                def_clean = definition.replace("\\n", " ")
+                lines = [ln.strip() for ln in trans_clean.split("\n") if ln.strip()]
+                first = lines[0] if lines else (def_clean[:80] or "")
                 return WordEntry(
                     word=word,
                     canonical=canonical,
                     phonetic=phonetic or "",
                     translation=first,
-                    translation_full="\n".join(lines) or definition,
+                    translation_full="\n".join(lines) or def_clean,
                 )
         return None
 
