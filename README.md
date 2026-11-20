@@ -10,6 +10,7 @@ python -m venv .venv
 .venv/Scripts/pip install -r requirements.txt
 .venv/Scripts/python scripts/prepare_dict.py        # 下载 ECDICT 词典(~63MB) -> data/dict.db
 .venv/Scripts/python scripts/prepare_ocr_models.py  # 预下载 OCR 模型(~30MB)
+.venv/Scripts/python scripts/prepare_tts.py         # 下载 Piper 神经语音模型(~63MB)；跳过则回退 SAPI 机械音
 ```
 
 GitHub 直连慢时给 prepare_dict 加镜像：`python scripts/prepare_dict.py --proxy https://ghfast.top/`

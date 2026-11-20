@@ -4,6 +4,7 @@ from PyInstaller.utils.hooks import collect_data_files
 
 datas = [
     ("data/dict.db", "data"),
+    ("data/tts", "data/tts"),  # Piper 神经语音模型
 ]
 datas += collect_data_files("rapidocr")  # config.yaml + models/*.onnx
 

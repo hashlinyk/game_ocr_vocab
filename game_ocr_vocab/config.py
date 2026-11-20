@@ -16,6 +16,7 @@ else:
 DATA_DIR = APP_DIR / "data"        # 用户数据：vocab.db / app.log / debug 帧
 DEBUG_DIR = DATA_DIR / "debug"
 DICT_DB = BUNDLED_DATA / "dict.db"
+TTS_MODEL = BUNDLED_DATA / "tts" / "en_US-amy-medium.onnx"  # 缺失时回退 SAPI
 
 # ---- OCR 模型 ----
 # small = PP-OCRv6 small（推荐，实测比 v5 mobile 更快更准）

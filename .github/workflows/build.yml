@@ -27,10 +27,11 @@ jobs:
           pip install -r requirements.txt
           pip install pyinstaller
 
-      - name: Download dictionary and OCR models
+      - name: Download dictionary and OCR/TTS models
         run: |
           python scripts/prepare_dict.py
           python scripts/prepare_ocr_models.py
+          python scripts/prepare_tts.py
 
       - name: Build exe
         run: pyinstaller game_ocr_vocab.spec --noconfirm
