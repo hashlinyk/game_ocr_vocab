@@ -1,6 +1,6 @@
 """主窗口：三标签页（识别词流 / 已掌握 / 生词本）+ 区域控制 + 状态提示。"""
 
-from PySide6.QtCore import Qt
+from PySide6.QtCore import QSize, Qt, QTimer
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
 )
 
 from .dictionary import Dictionary, WordEntry
+
+VOCAB_ROW_H = 56  # 词库行固定高度
 
 
 class WordRow(QWidget):
@@ -42,6 +44,8 @@ class WordRow(QWidget):
         trans.setStyleSheet("color: #1a1a1a; font-size: 14px;")
         left.addWidget(trans)
         layout.addLayout(left, 1)
+        self.trans_label = trans
+        self.base_height = 55
 
         # 按钮固定贴顶：与单词首行对齐，不随释义行数垂直居中
         btn_box = QWidget()
@@ -84,6 +88,8 @@ class VocabRow(QWidget):
             b.setCursor(Qt.PointingHandCursor)
             btn_lay.addWidget(b)
         layout.addWidget(btn_box, 0, Qt.AlignTop)
+        self.trans_label = tl
+        self.base_height = VOCAB_ROW_H
 
 
 class MainWindow(QMainWindow):
@@ -173,10 +179,36 @@ class MainWindow(QMainWindow):
         if idx == 0:
             self._new_words = 0
             self.tabs.setTabText(0, "识别")
+            QTimer.singleShot(0, lambda: self._fit_heights(self.list))
         elif idx == 1:
             self._refresh_vocab("mastered")
         elif idx == 2:
             self._refresh_vocab("vocab")
+
+    def _fit_heights(self, lw: QListWidget) -> None:
+        """按释义标签实际宽度精确计算行高：同行数=同高度，多行=更高。
+
+        wordWrap QLabel 的 sizeHint 高度随内容长度抖动，不能用；布局完成后
+        label 已有真实宽度，heightForWidth(width) 对相同行数给出相同高度。
+        """
+        if lw.count() == 0 or lw.viewport().width() <= 0:
+            return
+        for i in range(lw.count()):
+            row = lw.itemWidget(lw.item(i))
+            if row is None or getattr(row, "trans_label", None) is None:
+                continue
+            h = row.base_height
+            tl = row.trans_label
+            if tl.width() > 0:
+                hf = tl.heightForWidth(tl.width())
+                h = max(h, row.base_height + hf - 30)  # 30≈单行释义高度
+            lw.item(i).setSizeHint(QSize(10, h))
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        idx = self.tabs.currentIndex()
+        lw = self.list if idx == 0 else (self.list_m if idx == 1 else self.list_v)
+        QTimer.singleShot(0, lambda: self._fit_heights(lw))
 
     # ---- 识别流 ----
     def add_entries(self, entries: list) -> None:
@@ -188,10 +220,11 @@ class MainWindow(QMainWindow):
                 on_speak=self.tts.speak,
             )
             item = QListWidgetItem()
-            item.setSizeHint(row.sizeHint())
+            item.setSizeHint(QSize(10, row.base_height))
             self.list.addItem(item)
             self.list.setItemWidget(item, row)
         self.list.scrollToBottom()
+        QTimer.singleShot(0, lambda: self._fit_heights(self.list))
         if self.tabs.currentIndex() != 0:
             self._new_words += len(entries)
             self.tabs.setTabText(0, f"识别 ({self._new_words})")
@@ -240,9 +273,10 @@ class MainWindow(QMainWindow):
                 on_remove=self._remove_word,
             )
             item = QListWidgetItem()
-            item.setSizeHint(row.sizeHint())
+            item.setSizeHint(QSize(10, VOCAB_ROW_H))
             lw.addItem(item)
             lw.setItemWidget(item, row)
+        QTimer.singleShot(0, lambda: self._fit_heights(lw))
 
     def _move_word(self, word: str) -> None:
         status = self.store.status_of(word)
