@@ -68,13 +68,13 @@ class Dictionary:
                 trans_clean = translation.replace("\\n", "\n")
                 def_clean = definition.replace("\\n", " ")
                 lines = [ln.strip() for ln in trans_clean.split("\n") if ln.strip()]
-                first = lines[0] if lines else (def_clean[:80] or "")
+                full = "\n".join(lines) or def_clean[:200] or ""
                 return WordEntry(
                     word=word,
                     canonical=canonical,
                     phonetic=phonetic or "",
-                    translation=first,
-                    translation_full="\n".join(lines) or def_clean,
+                    translation=full,          # 全部词性，多行展示
+                    translation_full=full,
                 )
         return None
 
