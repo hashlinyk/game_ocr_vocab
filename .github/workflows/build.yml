@@ -1,0 +1,53 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Download dictionary and OCR models
+        run: |
+          python scripts/prepare_dict.py
+          python scripts/prepare_ocr_models.py
+
+      - name: Build exe
+        run: pyinstaller game_ocr_vocab.spec --noconfirm
+
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $dir = ".\dist\game_ocr_vocab"
+          $exe = Get-ChildItem $dir -Filter *.exe | Select-Object -First 1
+          if (-not $exe) { Write-Error "exe not found"; exit 1 }
+          Start-Process $exe.FullName -WorkingDirectory $dir
+          Start-Sleep -Seconds 15
+          $p = Get-Process | Where-Object { $_.Path -like "*dist\game_ocr_vocab*" }
+          if (-not $p) { Write-Error "exe failed to start"; exit 1 }
+          if (-not (Test-Path "$dir\data\app.log")) { Write-Error "app.log missing"; exit 1 }
+          Stop-Process -Id $p[0].Id -Force
+          Write-Output "smoke test OK"
+
+      - name: Zip portable folder
+        shell: pwsh
+        run: Compress-Archive -Path ".\dist\game_ocr_vocab\*" -DestinationPath ".\dist\game_ocr_vocab_win64.zip"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: game_ocr_vocab_win64
+          path: dist/game_ocr_vocab_win64.zip
+          retention-days: 14
