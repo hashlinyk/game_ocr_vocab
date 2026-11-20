@@ -72,13 +72,18 @@ class VocabRow(QWidget):
         tl.setToolTip(translation)
         layout.addWidget(wl)
         layout.addWidget(tl, 1)
+        btn_box = QWidget()
+        btn_lay = QHBoxLayout(btn_box)
+        btn_lay.setContentsMargins(0, 0, 0, 0)
+        btn_lay.setSpacing(6)
         mv = QPushButton(f"→{move_label}")
         mv.clicked.connect(lambda _=False: on_move(word))
         rm = QPushButton("移除")
         rm.clicked.connect(lambda _=False: on_remove(word))
         for b in (mv, rm):
             b.setCursor(Qt.PointingHandCursor)
-            layout.addWidget(b)
+            btn_lay.addWidget(b)
+        layout.addWidget(btn_box, 0, Qt.AlignTop)
 
 
 class MainWindow(QMainWindow):
