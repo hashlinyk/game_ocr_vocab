@@ -297,9 +297,9 @@ class MainWindow(QMainWindow):
 
     # ---- 词库 ----
     def _refresh_vocab(self, status: str) -> None:
-        """懒加载渲染：只渲染第一批，滚动接近底部时续载。"""
+        """懒加载渲染：只渲染第一批，滚动接近底部时续载。词库按字母序。"""
         lw = self.list_m if status == "mastered" else self.list_v
-        self._vocab_pages[status] = self.store.words_of(status)
+        self._vocab_pages[status] = sorted(self.store.words_of(status), key=lambda wt: wt[0])
         lw.setUpdatesEnabled(False)
         lw.clear()
         lw.setUpdatesEnabled(True)
