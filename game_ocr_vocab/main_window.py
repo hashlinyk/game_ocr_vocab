@@ -135,6 +135,7 @@ class MainWindow(QMainWindow):
         self.dict = dict_ref
         self._on_region_selected = on_region_selected
         self._new_words = 0
+        self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
         self.setWindowTitle("游戏单词助手")
         screen_w = self.screen().availableGeometry().width()
         self.resize(int(screen_w * 0.7), 640)
@@ -216,9 +217,11 @@ class MainWindow(QMainWindow):
             self.tabs.setTabText(0, "识别")
             QTimer.singleShot(0, lambda: self._fit_heights(self.list))
         elif idx == 1:
-            self._refresh_vocab("mastered")
+            if "mastered" in self._vocab_dirty:
+                self._refresh_vocab("mastered")
         elif idx == 2:
-            self._refresh_vocab("vocab")
+            if "vocab" in self._vocab_dirty:
+                self._refresh_vocab("vocab")
 
     def _fit_heights(self, lw: QListWidget) -> None:
         """按释义标签实际宽度精确计算行高：同行数=同高度，多行=更高。
@@ -291,6 +294,7 @@ class MainWindow(QMainWindow):
     # ---- 词库 ----
     def _refresh_vocab(self, status: str) -> None:
         lw = self.list_m if status == "mastered" else self.list_v
+        lw.setUpdatesEnabled(False)  # 重建期间暂停重绘，几百词也不会卡
         lw.clear()
         other = "生词本" if status == "mastered" else "已掌握"
         for word, _ts in self.store.words_of(status):
@@ -306,20 +310,31 @@ class MainWindow(QMainWindow):
             item.setSizeHint(QSize(10, row.preferred_height()))
             lw.addItem(item)
             lw.setItemWidget(item, row)
+        lw.setUpdatesEnabled(True)
+        self._vocab_dirty.discard(status)
         QTimer.singleShot(0, lambda: self._fit_heights(lw))
+
+    def _vocab_row_take(self, lw: QListWidget, word: str) -> None:
+        for i in range(lw.count()):
+            row = lw.itemWidget(lw.item(i))
+            if isinstance(row, VocabRow) and row.canonical == word:
+                lw.takeItem(i)
+                return
 
     def _move_word(self, word: str) -> None:
         status = self.store.status_of(word)
         target = "vocab" if status == "mastered" else "mastered"
         self.store.set_status(word, target)
-        self._refresh_vocab("mastered")
-        self._refresh_vocab("vocab")
+        lw = self.list_m if status == "mastered" else self.list_v
+        self._vocab_row_take(lw, word)          # 仅移除当前行，另一 tab 标脏延迟刷新
+        self._vocab_dirty = {"mastered", "vocab"}
         self._update_counts()
 
     def _remove_word(self, word: str) -> None:
         self.store.remove_status(word)
-        self._refresh_vocab("mastered")
-        self._refresh_vocab("vocab")
+        self._vocab_row_take(self.list_m, word)
+        self._vocab_row_take(self.list_v, word)
+        self._vocab_dirty = {"mastered", "vocab"}
         self._update_counts()
 
     def _clear_vocab_page(self, status: str) -> None:

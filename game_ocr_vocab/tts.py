@@ -3,10 +3,14 @@
 import queue
 import threading
 
+from .logutil import get_logger
+
+log = get_logger("tts")
+
 
 class TtsSpeaker:
     def __init__(self):
-        self._q: queue.Queue = queue.Queue(maxsize=4)
+        self._q: queue.Queue = queue.Queue(maxsize=1)  # 连点只保留最新
         self._running = True
         self._thread = threading.Thread(target=self._loop, daemon=True)
         self._thread.start()
@@ -19,7 +23,9 @@ class TtsSpeaker:
         voice = None
         try:
             voice = comtypes.client.CreateObject("SAPI.SpVoice")
-        except Exception:
+            log.debug(f"SAPI ready, voices={voice.GetVoices().Count}, volume={voice.Volume}")
+        except Exception as exc:
+            log.debug(f"SAPI create failed: {exc}")
             voice = None
         while self._running:
             try:
@@ -28,9 +34,11 @@ class TtsSpeaker:
                 continue
             if voice is not None:
                 try:
-                    voice.Speak(text, 3)  # SVSFlagsAsync | SVSFPurgeBeforeSpeak
-                except Exception:
-                    pass
+                    # 同步播报：STA 线程无消息泵，SVSFlagsAsync 不会真正出声
+                    voice.Speak(text)
+                    log.debug(f"spoke: {text!r}")
+                except Exception as exc:
+                    log.debug(f"speak failed: {exc}")
         comtypes.CoUninitialize()
 
     def speak(self, text: str) -> None:
