@@ -37,6 +37,14 @@ GitHub 直连慢时给 prepare_dict 加镜像：`python scripts/prepare_dict.py 
 `game_ocr_vocab/config.py`：`CHANGE_RATIO`(变化灵敏度，调大更不敏感)、`COOLDOWN`、
 `DEBUG_SAVE_FRAMES`(把每次触发 OCR 的帧存到 data/debug/ 供核对)。
 
+## 免安装分发（CI 自动构建）
+
+推送到 `main` 后 GitHub Actions 自动构建 Windows 免安装版：
+仓库 **Actions → 最新 run → Artifacts** 下载 `game_ocr_vocab_win64.zip`，解压双击 `游戏单词助手.exe` 即用（Windows 10/11 x64，全离线）。
+
+本地打包：`pyinstaller game_ocr_vocab.spec --noconfirm`，产物在 `dist/game_ocr_vocab/`。
+打包版词典/OCR 模型内置于程序中；用户词库（`vocab.db`）生成在 exe 同级 `data/` 目录。
+
 ## 已知限制
 
 - **独占全屏**：个别真·独占全屏(DirectX FSE)或带反作弊的游戏会拦截桌面捕获（黑帧/无帧），
