@@ -9,6 +9,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QStyle,
     QTabWidget,
     QVBoxLayout,
     QWidget,
@@ -16,10 +17,22 @@ from PySide6.QtWidgets import (
 
 from .dictionary import Dictionary, WordEntry
 
-VOCAB_ROW_H = 56  # 词库行固定高度
+WORD_TRANS_SPACING = 10  # 单词行与释义行间距
 
 
-class WordRow(QWidget):
+class _RowBase(QWidget):
+    """识别行/词库行公共基类：按释义标签实际宽度精确计算行高。"""
+
+    def preferred_height(self) -> int:
+        m = self.layout().contentsMargins()
+        h = m.top() + m.bottom() + self.word_label.sizeHint().height() + WORD_TRANS_SPACING
+        tl = self.trans_label
+        if tl.width() > 0:
+            h += tl.heightForWidth(tl.width())
+        return max(h, 48)
+
+
+class WordRow(_RowBase):
     """识别词流行。"""
 
     def __init__(self, entry: WordEntry, on_mastered, on_vocab, on_speak):
@@ -29,31 +42,37 @@ class WordRow(QWidget):
         layout.setContentsMargins(8, 4, 8, 4)
 
         left = QVBoxLayout()
-        left.setSpacing(10)  # 单词行与释义的间距
+        left.setSpacing(WORD_TRANS_SPACING)
         top = QHBoxLayout()
-        word_label = QLabel(entry.word)
-        word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        self.word_label = QLabel(entry.word)
+        self.word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
         pho = QLabel(entry.phonetic)
         pho.setStyleSheet("color: #888888; font-size: 13px;")
-        top.addWidget(word_label)
+        top.addWidget(self.word_label)
         top.addWidget(pho)
         top.addStretch()
         left.addLayout(top)
-        trans = QLabel(entry.translation)
-        trans.setWordWrap(True)
-        trans.setToolTip(entry.translation_full)
-        trans.setStyleSheet("color: #1a1a1a; font-size: 14px;")
-        left.addWidget(trans)
+        self.trans_label = QLabel(entry.translation)
+        self.trans_label.setWordWrap(True)
+        self.trans_label.setToolTip(entry.translation_full)
+        self.trans_label.setStyleSheet("color: #1a1a1a; font-size: 14px;")
+        left.addWidget(self.trans_label)
         layout.addLayout(left, 1)
-        self.trans_label = trans
-        self.base_height = 55
 
-        # 按钮固定贴顶：与单词首行对齐，不随释义行数垂直居中
+        # 发音：喇叭小按钮紧贴音标
+        speak_btn = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume), "")
+        speak_btn.setFixedSize(26, 26)
+        speak_btn.setToolTip(f"发音 {entry.word}")
+        speak_btn.setCursor(Qt.PointingHandCursor)
+        speak_btn.clicked.connect(lambda _=False: on_speak(entry.canonical))
+        top.addWidget(speak_btn)
+
+        # 右侧按钮固定贴顶：与单词首行对齐，不随释义行数垂直居中
         btn_box = QWidget()
         btn_lay = QHBoxLayout(btn_box)
         btn_lay.setContentsMargins(0, 0, 0, 0)
         btn_lay.setSpacing(6)
-        for text, cb in (("掌握", on_mastered), ("生词本", on_vocab), ("发音", on_speak)):
+        for text, cb in (("掌握", on_mastered), ("生词本", on_vocab)):
             btn = QPushButton(text)
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _=False, c=entry.canonical, f=cb: f(c))
@@ -61,37 +80,51 @@ class WordRow(QWidget):
         layout.addWidget(btn_box, 0, Qt.AlignTop)
 
 
-class VocabRow(QWidget):
-    """词库行：单词 / 释义 / 互移 / 移除。"""
+class VocabRow(_RowBase):
+    """词库行：排版与识别行一致（单词+音标+喇叭 / 释义多行 / 右侧互移、移除）。"""
 
-    def __init__(self, word, translation, move_label, on_move, on_remove):
+    def __init__(self, entry: WordEntry, move_label, on_move, on_remove, on_speak):
         super().__init__()
-        self.canonical = word
+        self.canonical = entry.canonical
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 3, 8, 3)
-        layout.setSpacing(12)  # 单词与释义的水平间距
-        wl = QLabel(word)
-        wl.setStyleSheet("font-weight: bold; font-size: 18px;")
-        tl = QLabel(translation)
-        tl.setStyleSheet("color: #555555; font-size: 14px;")
-        tl.setWordWrap(True)
-        tl.setToolTip(translation)
-        layout.addWidget(wl)
-        layout.addWidget(tl, 1)
+        layout.setContentsMargins(8, 4, 8, 4)
+
+        left = QVBoxLayout()
+        left.setSpacing(WORD_TRANS_SPACING)
+        top = QHBoxLayout()
+        self.word_label = QLabel(entry.word)
+        self.word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        pho = QLabel(entry.phonetic)
+        pho.setStyleSheet("color: #888888; font-size: 13px;")
+        top.addWidget(self.word_label)
+        top.addWidget(pho)
+        speak_btn = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume), "")
+        speak_btn.setFixedSize(26, 26)
+        speak_btn.setToolTip(f"发音 {entry.word}")
+        speak_btn.setCursor(Qt.PointingHandCursor)
+        speak_btn.clicked.connect(lambda _=False: on_speak(entry.word))
+        top.addWidget(speak_btn)
+        top.addStretch()
+        left.addLayout(top)
+        self.trans_label = QLabel(entry.translation)
+        self.trans_label.setWordWrap(True)
+        self.trans_label.setToolTip(entry.translation_full)
+        self.trans_label.setStyleSheet("color: #555555; font-size: 14px;")
+        left.addWidget(self.trans_label)
+        layout.addLayout(left, 1)
+
         btn_box = QWidget()
         btn_lay = QHBoxLayout(btn_box)
         btn_lay.setContentsMargins(0, 0, 0, 0)
         btn_lay.setSpacing(6)
         mv = QPushButton(f"→{move_label}")
-        mv.clicked.connect(lambda _=False: on_move(word))
+        mv.clicked.connect(lambda _=False: on_move(entry.word))
         rm = QPushButton("移除")
-        rm.clicked.connect(lambda _=False: on_remove(word))
+        rm.clicked.connect(lambda _=False: on_remove(entry.word))
         for b in (mv, rm):
             b.setCursor(Qt.PointingHandCursor)
             btn_lay.addWidget(b)
         layout.addWidget(btn_box, 0, Qt.AlignTop)
-        self.trans_label = tl
-        self.base_height = VOCAB_ROW_H
 
 
 class MainWindow(QMainWindow):
@@ -199,12 +232,7 @@ class MainWindow(QMainWindow):
             row = lw.itemWidget(lw.item(i))
             if row is None or getattr(row, "trans_label", None) is None:
                 continue
-            h = row.base_height
-            tl = row.trans_label
-            if tl.width() > 0:
-                hf = tl.heightForWidth(tl.width())
-                h = max(h, row.base_height + hf - 30)  # 30≈单行释义高度
-            lw.item(i).setSizeHint(QSize(10, h))
+            lw.item(i).setSizeHint(QSize(10, row.preferred_height()))
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
@@ -222,7 +250,7 @@ class MainWindow(QMainWindow):
                 on_speak=self.tts.speak,
             )
             item = QListWidgetItem()
-            item.setSizeHint(QSize(10, row.base_height))
+            item.setSizeHint(QSize(10, row.preferred_height()))
             self.list.addItem(item)
             self.list.setItemWidget(item, row)
         self.list.scrollToBottom()
@@ -266,16 +294,16 @@ class MainWindow(QMainWindow):
         lw.clear()
         other = "生词本" if status == "mastered" else "已掌握"
         for word, _ts in self.store.words_of(status):
-            entry = self.dict.lookup(word)
+            entry = self.dict.lookup(word) or WordEntry(word, word, "", "（词典中未收录）", "")
             row = VocabRow(
-                word,
-                entry.translation if entry else "",
+                entry,
                 other,
                 on_move=self._move_word,
                 on_remove=self._remove_word,
+                on_speak=self.tts.speak,
             )
             item = QListWidgetItem()
-            item.setSizeHint(QSize(10, VOCAB_ROW_H))
+            item.setSizeHint(QSize(10, row.preferred_height()))
             lw.addItem(item)
             lw.setItemWidget(item, row)
         QTimer.singleShot(0, lambda: self._fit_heights(lw))
