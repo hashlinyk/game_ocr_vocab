@@ -18,6 +18,7 @@ from PySide6.QtWidgets import (
 from .dictionary import Dictionary, WordEntry
 
 WORD_TRANS_SPACING = 10  # 单词行与释义行间距
+VOCAB_PAGE = 80          # 词库懒加载每批行数
 
 
 class _RowBase(QWidget):
@@ -52,20 +53,19 @@ class WordRow(_RowBase):
         top.addWidget(pho)
         top.addStretch()
         left.addLayout(top)
+        # 发音：喇叭小按钮紧贴音标（插在 stretch 之前，避免被推到最右）
+        speak_btn = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume), "")
+        speak_btn.setFixedSize(26, 26)
+        speak_btn.setToolTip(f"发音 {entry.word}")
+        speak_btn.setCursor(Qt.PointingHandCursor)
+        speak_btn.clicked.connect(lambda _=False: on_speak(entry.canonical))
+        top.insertWidget(top.count() - 1, speak_btn)
         self.trans_label = QLabel(entry.translation)
         self.trans_label.setWordWrap(True)
         self.trans_label.setToolTip(entry.translation_full)
         self.trans_label.setStyleSheet("color: #1a1a1a; font-size: 14px;")
         left.addWidget(self.trans_label)
         layout.addLayout(left, 1)
-
-        # 发音：喇叭小按钮紧贴音标
-        speak_btn = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume), "")
-        speak_btn.setFixedSize(26, 26)
-        speak_btn.setToolTip(f"发音 {entry.word}")
-        speak_btn.setCursor(Qt.PointingHandCursor)
-        speak_btn.clicked.connect(lambda _=False: on_speak(entry.canonical))
-        top.addWidget(speak_btn)
 
         # 右侧按钮固定贴顶：与单词首行对齐，不随释义行数垂直居中
         btn_box = QWidget()
@@ -136,6 +136,7 @@ class MainWindow(QMainWindow):
         self._on_region_selected = on_region_selected
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
+        self._vocab_pages = {}                     # status -> 全量词表（懒加载分批渲染）
         self.setWindowTitle("游戏单词助手")
         screen_w = self.screen().availableGeometry().width()
         self.resize(int(screen_w * 0.7), 640)
@@ -203,6 +204,9 @@ class MainWindow(QMainWindow):
         lw = QListWidget()
         lw.setSelectionMode(QListWidget.NoSelection)
         lw.setWordWrap(True)
+        lw.verticalScrollBar().valueChanged.connect(
+            lambda _v, lw=lw, status=status: self._maybe_load_more(lw, status)
+        )
         vbox.addWidget(lw, 1)
         if status == "mastered":
             self.list_m = lw
@@ -223,7 +227,7 @@ class MainWindow(QMainWindow):
             if "vocab" in self._vocab_dirty:
                 self._refresh_vocab("vocab")
 
-    def _fit_heights(self, lw: QListWidget) -> None:
+    def _fit_heights(self, lw: QListWidget, start: int = 0) -> None:
         """按释义标签实际宽度精确计算行高：同行数=同高度，多行=更高。
 
         wordWrap QLabel 的 sizeHint 高度随内容长度抖动，不能用；布局完成后
@@ -231,7 +235,7 @@ class MainWindow(QMainWindow):
         """
         if lw.count() == 0 or lw.viewport().width() <= 0:
             return
-        for i in range(lw.count()):
+        for i in range(max(start, 0), lw.count()):
             row = lw.itemWidget(lw.item(i))
             if row is None or getattr(row, "trans_label", None) is None:
                 continue
@@ -293,11 +297,23 @@ class MainWindow(QMainWindow):
 
     # ---- 词库 ----
     def _refresh_vocab(self, status: str) -> None:
+        """懒加载渲染：只渲染第一批，滚动接近底部时续载。"""
         lw = self.list_m if status == "mastered" else self.list_v
-        lw.setUpdatesEnabled(False)  # 重建期间暂停重绘，几百词也不会卡
+        self._vocab_pages[status] = self.store.words_of(status)
+        lw.setUpdatesEnabled(False)
         lw.clear()
+        lw.setUpdatesEnabled(True)
+        self._vocab_dirty.discard(status)
+        self._vocab_fill_batch(lw, status, 0, VOCAB_PAGE)
+
+    def _vocab_fill_batch(self, lw: QListWidget, status: str, start: int, count: int) -> None:
+        words = self._vocab_pages.get(status, [])
+        end = min(start + count, len(words))
+        if start >= end:
+            return
         other = "生词本" if status == "mastered" else "已掌握"
-        for word, _ts in self.store.words_of(status):
+        lw.setUpdatesEnabled(False)
+        for word, _ts in words[start:end]:
             entry = self.dict.lookup(word) or WordEntry(word, word, "", "（词典中未收录）", "")
             row = VocabRow(
                 entry,
@@ -311,8 +327,16 @@ class MainWindow(QMainWindow):
             lw.addItem(item)
             lw.setItemWidget(item, row)
         lw.setUpdatesEnabled(True)
-        self._vocab_dirty.discard(status)
-        QTimer.singleShot(0, lambda: self._fit_heights(lw))
+        QTimer.singleShot(0, lambda: self._fit_heights(lw, start))
+
+    def _maybe_load_more(self, lw: QListWidget, status: str) -> None:
+        sb = lw.verticalScrollBar()
+        if sb.maximum() <= 0 or sb.value() < sb.maximum() - 60:
+            return
+        total = len(self._vocab_pages.get(status, []))
+        if lw.count() >= total:
+            return
+        self._vocab_fill_batch(lw, status, lw.count(), VOCAB_PAGE)
 
     def _vocab_row_take(self, lw: QListWidget, word: str) -> None:
         for i in range(lw.count()):
@@ -327,6 +351,9 @@ class MainWindow(QMainWindow):
         self.store.set_status(word, target)
         lw = self.list_m if status == "mastered" else self.list_v
         self._vocab_row_take(lw, word)          # 仅移除当前行，另一 tab 标脏延迟刷新
+        pages = self._vocab_pages.get(status)
+        if pages is not None:
+            self._vocab_pages[status] = [(w, t) for w, t in pages if w != word]
         self._vocab_dirty = {"mastered", "vocab"}
         self._update_counts()
 
@@ -334,6 +361,10 @@ class MainWindow(QMainWindow):
         self.store.remove_status(word)
         self._vocab_row_take(self.list_m, word)
         self._vocab_row_take(self.list_v, word)
+        for status in ("mastered", "vocab"):
+            pages = self._vocab_pages.get(status)
+            if pages is not None:
+                self._vocab_pages[status] = [(w, t) for w, t in pages if w != word]
         self._vocab_dirty = {"mastered", "vocab"}
         self._update_counts()
 
