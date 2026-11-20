@@ -18,7 +18,7 @@ from PySide6.QtWidgets import (
 from .dictionary import Dictionary, WordEntry
 
 WORD_TRANS_SPACING = 10  # 单词行与释义行间距
-VOCAB_PAGE = 80          # 词库懒加载每批行数
+VOCAB_PAGE = 20          # 词库懒加载每批行数
 
 
 class _RowBase(QWidget):
