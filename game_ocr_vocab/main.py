@@ -133,7 +133,7 @@ def main() -> int:
 
     quick_add = QuickAddDialog(win)
     manager = HotkeyManager(app, config.DATA_DIR / "settings.json")
-    MODS = MOD_ALT | MOD_CONTROL | MOD_SHIFT
+    MODS = MOD_ALT | MOD_SHIFT
     HOTKEY_DEFS = (
         ("quick_add", "快速查词", MODS, ord("F"), quick_add.popup),
         ("master_all", "全部掌握", MODS, ord("C"), lambda: win._mark_all_mastered(include_vocab=True)),
