@@ -7,6 +7,7 @@ datas = [
     ("data/tts", "data/tts"),  # Piper 神经语音模型
 ]
 datas += collect_data_files("rapidocr")  # config.yaml + models/*.onnx
+datas += collect_data_files("piper")  # espeak-ng-data 等音素数据，缺失会导致合成时原生崩溃
 
 a = Analysis(
     ["run.py"],

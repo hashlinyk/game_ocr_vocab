@@ -48,6 +48,8 @@ jobs:
           if (-not $p) { Write-Error "exe failed to start"; exit 1 }
           if (-not (Test-Path "$dir\data\app.log")) { Write-Error "app.log missing"; exit 1 }
           Stop-Process -Id $p[0].Id -Force
+          if (-not (Test-Path "$dir\_internal\piper\espeak-ng-data")) { Write-Error "piper espeak-ng-data missing"; exit 1 }
+          if (-not (Test-Path "$dir\_internal\data\tts\en_US-amy-medium.onnx")) { Write-Error "piper voice model missing"; exit 1 }
           Write-Output "smoke test OK"
 
       - name: Zip portable folder
