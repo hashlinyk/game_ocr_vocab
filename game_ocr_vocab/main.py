@@ -53,24 +53,9 @@ def main() -> int:
     ocr_thread = _start_thread(ocr_worker)
 
     pending: dict = {"kind": None, "arg": None}
+    run_state: dict = {"value": "idle"}  # idle / running / paused
 
-    def on_region_selected(output_idx: int, region: tuple) -> None:
-        """框选完成：仅登记目标，等待点击『开始识别』。"""
-        pending["kind"] = "region"
-        pending["arg"] = (region, output_idx)  # 与 set_region(region, output_idx) 参数顺序一致
-        win.set_region_text(region)
-        win.set_run_state("idle")
-        win.set_start_ready(True)
-
-    def on_window_selected(hwnd: int, title: str) -> None:
-        """选择窗口：仅登记目标，等待点击『开始识别』。"""
-        pending["kind"] = "window"
-        pending["arg"] = hwnd
-        win.set_window_text(title)
-        win.set_run_state("idle")
-        win.set_start_ready(True)
-
-    def on_start() -> None:
+    def start_capture() -> None:
         if pending["kind"] is None:
             return
         ocr_worker.reset_snap()
@@ -79,14 +64,42 @@ def main() -> int:
             capture_worker.set_region(*pending["arg"])
         else:
             capture_worker.set_window(pending["arg"])
+        run_state["value"] = "running"
         win.set_run_state("running")
+
+    def on_region_selected(output_idx: int, region: tuple) -> None:
+        """框选完成：识别中直接切到新区域；未开始则等待点击『开始识别』。"""
+        pending["kind"] = "region"
+        pending["arg"] = (region, output_idx)  # 与 set_region(region, output_idx) 参数顺序一致
+        win.set_region_text(region)
+        if run_state["value"] in ("running", "paused"):
+            start_capture()
+        else:
+            win.set_run_state("idle")
+            win.set_start_ready(True)
+
+    def on_window_selected(hwnd: int, title: str) -> None:
+        """选择窗口：识别中直接切到新窗口；未开始则等待点击『开始识别』。"""
+        pending["kind"] = "window"
+        pending["arg"] = hwnd
+        win.set_window_text(title)
+        if run_state["value"] in ("running", "paused"):
+            start_capture()
+        else:
+            win.set_run_state("idle")
+            win.set_start_ready(True)
+
+    def on_start() -> None:
+        start_capture()
 
     def on_toggle_pause(paused: bool) -> None:
         capture_worker.set_paused(paused)
+        run_state["value"] = "paused" if paused else "running"
         win.set_run_state("paused" if paused else "running")
 
     def on_window_stopped() -> None:
         pending["kind"] = None
+        run_state["value"] = "idle"
         win.set_run_state("idle")
         win.set_start_ready(False)
 
