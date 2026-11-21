@@ -48,6 +48,11 @@ class TtsSpeaker:
             log.debug("piper 模型缺失，回退 SAPI")
             return None
         try:
+            str(model).encode("ascii")
+        except UnicodeEncodeError:
+            log.debug("警告：程序路径含非 ASCII 字符，piper espeak 层可能无法工作，回退 SAPI")
+            return None
+        try:
             from piper import PiperVoice
 
             voice = PiperVoice.load(str(model))

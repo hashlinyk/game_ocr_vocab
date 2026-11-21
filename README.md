@@ -48,6 +48,9 @@ GitHub 直连慢时给 prepare_dict 加镜像：`python scripts/prepare_dict.py 
 
 ## 已知限制
 
+- **必须解压到纯英文路径**（如 `D:\GameOcrVocab`）：Piper 语音引擎的 espeak 音素层
+  不支持含中文/非 ASCII 的目录路径，放在中文目录会导致点发音时卡死或闪退。
+
 - **独占全屏**：个别真·独占全屏(DirectX FSE)或带反作弊的游戏会拦截桌面捕获（黑帧/无帧），
   把游戏显示模式切为 **无边框窗口(Borderless/Windowed Fullscreen)** 即可。
 - 区域选择只覆盖主显示器。

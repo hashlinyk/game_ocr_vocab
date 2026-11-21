@@ -1,5 +1,6 @@
 """入口：装配捕获/OCR/UI 三线程 + 前置检查。运行: python -m game_ocr_vocab"""
 
+import os
 import sys
 
 from PySide6.QtWidgets import QApplication, QMessageBox
@@ -63,6 +64,17 @@ def main() -> int:
     ocr_worker.ocrError.connect(win.show_error)
     capture_worker.captureError.connect(win.show_error)
     win.show()
+
+    # 自测钩子：GV_SELFTEST_TTS=1 时启动数秒后自动合成一次，用于复现打包环境 TTS 崩溃
+    if os.environ.get("GV_SELFTEST_TTS"):
+        from PySide6.QtCore import QTimer
+
+        def _selftest_speak():
+            tts.speak("selftest")
+            win.statusBar().showMessage("selftest speak triggered", 5000)
+
+        QTimer.singleShot(6000, _selftest_speak)
+
     ret = app.exec()
 
     ocr_worker.stop()
