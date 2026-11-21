@@ -1,8 +1,9 @@
 """主窗口：三标签页（识别词流 / 已掌握 / 生词本）+ 区域控制 + 状态提示。"""
 
-from PySide6.QtCore import QRect, QSize, Qt, QTimer
+from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QDialog,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -232,14 +233,63 @@ class VocabRow(_RowBase):
         layout.addWidget(btn_box, 0, Qt.AlignTop)
 
 
+class WindowPickerDialog(QDialog):
+    """选择要识别的目标窗口。"""
+
+    windowPicked = Signal(int, str)   # (hwnd, title)
+
+    def __init__(self, exclude_hwnd=None):
+        super().__init__()
+        from .window_pick import enum_app_windows
+
+        self.setWindowTitle("选择目标窗口")
+        self.resize(520, 520)
+        vbox = QVBoxLayout(self)
+        hint = QLabel("双击列表中的窗口开始识别；目标窗口移动/缩放会自动跟随")
+        hint.setStyleSheet("color: #888;")
+        hint.setWordWrap(True)
+        vbox.addWidget(hint)
+        self.listw = QListWidget()
+        self.listw.setWordWrap(True)
+        self.listw.itemDoubleClicked.connect(self._on_double)
+        vbox.addWidget(self.listw, 1)
+        bottom = QHBoxLayout()
+        refresh_btn = QPushButton("刷新列表")
+        refresh_btn.clicked.connect(lambda: self._fill())
+        cancel_btn = QPushButton("取消")
+        cancel_btn.clicked.connect(self.reject)
+        bottom.addWidget(refresh_btn)
+        bottom.addStretch()
+        bottom.addWidget(cancel_btn)
+        vbox.addLayout(bottom)
+        self._entries = []
+        self._fill(exclude_hwnd)
+
+    def _fill(self, exclude_hwnd=None) -> None:
+        from .window_pick import enum_app_windows
+
+        self.listw.clear()
+        self._entries = enum_app_windows(exclude_hwnd)
+        for hwnd, title in self._entries:
+            self.listw.addItem(f"{title}")
+
+    def _on_double(self, item) -> None:
+        idx = self.listw.row(item)
+        if 0 <= idx < len(self._entries):
+            hwnd, title = self._entries[idx]
+            self.windowPicked.emit(hwnd, title)
+            self.accept()
+
+
 class MainWindow(QMainWindow):
-    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary, on_toggle_pause=None):
+    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary, on_toggle_pause=None, on_pick_window=None):
         super().__init__()
         self.store = store
         self.tts = tts
         self.dict = dict_ref
         self._on_region_selected = on_region_selected
         self._on_toggle_pause = on_toggle_pause
+        self._on_pick_window = on_pick_window
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
         self._vocab_pages = {}                     # status -> 全量词表（懒加载分批渲染）
@@ -252,13 +302,18 @@ class MainWindow(QMainWindow):
         vbox = QVBoxLayout(central)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
-        vbox.addWidget(TitleBar(self))
+        self.titlebar = TitleBar(self)
+        vbox.addWidget(self.titlebar)
 
         inner = QVBoxLayout()
         inner.setContentsMargins(10, 8, 10, 8)
         inner.setSpacing(8)
         top = QHBoxLayout()
+        win_btn = QPushButton("选择窗口")
+        win_btn.setToolTip("选定目标窗口，窗口移动/缩放自动跟随（优先推荐）")
+        win_btn.clicked.connect(self._pick_window)
         pick_btn = QPushButton("框选识别区域")
+        pick_btn.setToolTip("全屏遮罩拖拽框出固定区域")
         pick_btn.clicked.connect(self._pick_region)
         self.state_label = QLabel("未开始识别")
         self.state_label.setStyleSheet("color: #999999; font-weight: bold;")
@@ -269,6 +324,7 @@ class MainWindow(QMainWindow):
         self.region_label.setStyleSheet("color: gray;")
         self.count_label = QLabel("")
         self._update_counts()
+        top.addWidget(win_btn)
         top.addWidget(pick_btn)
         top.addWidget(self.state_label)
         top.addWidget(self.pause_btn)
@@ -293,6 +349,20 @@ class MainWindow(QMainWindow):
         self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
         self.pause_btn.setText("继续识别" if state == "paused" else "暂停识别")
         self.pause_btn.setEnabled(state != "idle")
+
+    def _pick_window(self) -> None:
+        dlg = WindowPickerDialog(exclude_hwnd=int(self.winId()))
+        dlg.windowPicked.connect(self._on_window_picked)
+        dlg.exec()
+
+    def _on_window_picked(self, hwnd: int, title: str) -> None:
+        self._on_pick_window(hwnd, title)
+
+    def set_window_text(self, title: str) -> None:
+        self.region_label.setText(f"窗口: {title}")
+
+    def set_pinned(self, checked: bool) -> None:
+        self.titlebar.pin_btn.setChecked(checked)
 
     def _toggle_pause(self) -> None:
         if self._on_toggle_pause is None:
