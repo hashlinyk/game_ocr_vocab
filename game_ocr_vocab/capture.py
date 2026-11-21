@@ -316,13 +316,6 @@ class CaptureWorker(QObject):
         self._frame_no += 1
         path = config.DEBUG_DIR / f"t{self._frame_no:04d}_{reason}_r{ratio:.2f}_{time.strftime('%H%M%S')}.png"
         _cv2.imwrite(str(path), _cv2.cvtColor(frame, _cv2.COLOR_RGB2BGR))
-        # 防止无限占用磁盘：超量删最旧
-        frames = sorted(config.DEBUG_DIR.glob("t*.png"))
-        for old in frames[: max(0, len(frames) - config.DEBUG_KEEP)]:
-            try:
-                old.unlink()
-            except OSError:
-                pass
 
 
 def _selftest() -> None:

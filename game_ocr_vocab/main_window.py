@@ -142,7 +142,7 @@ class _RowBase(QWidget):
 class WordRow(_RowBase):
     """识别词流行。"""
 
-    def __init__(self, entry: WordEntry, in_vocab: bool, on_mastered, on_hide, on_speak):
+    def __init__(self, entry: WordEntry, in_vocab: bool, on_mastered, on_vocab, on_hide, on_speak):
         super().__init__()
         self.canonical = entry.canonical
         self.in_vocab = in_vocab
@@ -189,12 +189,17 @@ class WordRow(_RowBase):
         btn_lay = QHBoxLayout(btn_box)
         btn_lay.setContentsMargins(0, 0, 0, 0)
         btn_lay.setSpacing(6)
-        for text, cb in (("掌握", on_mastered), ("隐藏", on_hide)):
-            btn = QPushButton(text)
-            btn.setFixedWidth(64)  # 统一宽度，避免布局变动
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.clicked.connect(lambda _=False, c=entry.canonical, f=cb: f(c))
-            btn_lay.addWidget(btn)
+        # 第二按钮：生词显示「隐藏」（仅本次隐藏），普通词显示「生词本」；宽度统一
+        if in_vocab:
+            second = ("隐藏", on_hide, "仅从本次列表隐藏，下次出现会再次显示")
+        else:
+            second = ("生词本", on_vocab, "加入生词本")
+        second_btn = QPushButton(second[0])
+        second_btn.setFixedWidth(64)
+        second_btn.setToolTip(second[2])
+        second_btn.setCursor(Qt.PointingHandCursor)
+        second_btn.clicked.connect(lambda _=False, c=entry.canonical, f=second[1]: f(c))
+        btn_lay.addWidget(second_btn)
         layout.addWidget(btn_box, 0, Qt.AlignTop)
 
 
@@ -346,6 +351,12 @@ class MainWindow(QMainWindow):
         vbox.addLayout(inner)
         QSizeGrip(self)  # 无边框窗口右下角拖拽调整大小
 
+        # debug 帧清理：主线程定时执行（捕获线程只写帧，避免并发删除竞争）
+        cleanup_timer = QTimer(self)
+        cleanup_timer.timeout.connect(self._cleanup_debug_frames)
+        cleanup_timer.start(60_000)
+        QTimer.singleShot(5_000, self._cleanup_debug_frames)
+
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_stream_tab(), "识别")
         self.tabs.addTab(self._build_vocab_tab("mastered"), "已掌握")
@@ -361,6 +372,18 @@ class MainWindow(QMainWindow):
         self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
         self.pause_btn.setText("继续识别" if state == "paused" else "暂停识别")
         self.pause_btn.setEnabled(state != "idle")
+
+    def _cleanup_debug_frames(self) -> None:
+        from . import config
+
+        if not config.DEBUG_SAVE_FRAMES:
+            return
+        frames = sorted(config.DEBUG_DIR.glob("t*.png"))
+        for old in frames[: max(0, len(frames) - config.DEBUG_KEEP)]:
+            try:
+                old.unlink()
+            except OSError:
+                pass
 
     def _pick_window(self) -> None:
         dlg = WindowPickerDialog(exclude_hwnd=int(self.winId()))
@@ -471,6 +494,7 @@ class MainWindow(QMainWindow):
                 entry,
                 in_vocab,
                 on_mastered=self._mark(entry.canonical, "mastered"),
+                on_vocab=self._mark(entry.canonical, "vocab"),
                 on_hide=self._hide_stream_word,
                 on_speak=self.tts.speak,
             )
