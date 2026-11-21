@@ -80,7 +80,7 @@ class SettingsDialog(QDialog):
         layout.addWidget(self.stack, 1)
 
     def _build_about_page(self) -> QWidget:
-        from . import __version__
+        from . import __author__, __version__
 
         page = QWidget()
         vbox = QVBoxLayout(page)
@@ -88,6 +88,8 @@ class SettingsDialog(QDialog):
         title.setStyleSheet("font-size: 18px; font-weight: bold;")
         ver = QLabel(f"版本 {__version__}")
         ver.setStyleSheet("color: #666;")
+        author = QLabel(f"作者：{__author__}")
+        author.setStyleSheet("color: #666;")
         desc = QLabel(
             "游戏画面离线英文单词识别与翻译\n"
             "OCR：RapidOCR ｜ 词典：ECDICT ｜ 发音：Piper 神经语音\n"
@@ -96,6 +98,7 @@ class SettingsDialog(QDialog):
         desc.setStyleSheet("color: #888;")
         vbox.addWidget(title)
         vbox.addWidget(ver)
+        vbox.addWidget(author)
         vbox.addSpacing(8)
         vbox.addWidget(desc)
         vbox.addStretch()
