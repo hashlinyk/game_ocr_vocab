@@ -27,8 +27,18 @@ class WordStore:
 
     # ---- 增量判定（OCR 线程调用） ----
     def is_new(self, canonical: str) -> bool:
+        """生词本中的词允许再次识别；只排除已展示与本会话已掌握。"""
         with self._lock:
-            return canonical not in self._shown and canonical not in self._mastered and canonical not in self._vocab
+            return canonical not in self._shown and canonical not in self._mastered
+
+    def is_vocab(self, canonical: str) -> bool:
+        with self._lock:
+            return canonical in self._vocab
+
+    def reset_shown_word(self, canonical: str) -> None:
+        """清除单个词的本会话已展示记录（配合识别页隐藏按钮：下次出现会再次追加）。"""
+        with self._lock:
+            self._shown.discard(canonical)
 
     def mark_shown(self, canonical: str) -> None:
         with self._lock:

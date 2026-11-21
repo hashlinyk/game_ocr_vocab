@@ -142,9 +142,10 @@ class _RowBase(QWidget):
 class WordRow(_RowBase):
     """识别词流行。"""
 
-    def __init__(self, entry: WordEntry, on_mastered, on_vocab, on_speak):
+    def __init__(self, entry: WordEntry, in_vocab: bool, on_mastered, on_hide, on_speak):
         super().__init__()
         self.canonical = entry.canonical
+        self.in_vocab = in_vocab
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
 
@@ -153,9 +154,19 @@ class WordRow(_RowBase):
         top = QHBoxLayout()
         self.word_label = QLabel(entry.word)
         self.word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        top.addWidget(self.word_label)
+        if in_vocab:
+            tag = QLabel("生")
+            tag.setFixedWidth(20)
+            tag.setAlignment(Qt.AlignCenter)
+            tag.setToolTip("该词在生词本中")
+            tag.setStyleSheet(
+                "background: #e67e22; color: white; border-radius: 4px;"
+                "font-size: 11px; font-weight: bold;"
+            )
+            top.addWidget(tag)
         pho = QLabel(entry.phonetic)
         pho.setStyleSheet("color: #888888; font-size: 13px;")
-        top.addWidget(self.word_label)
         top.addWidget(pho)
         top.addStretch()
         left.addLayout(top)
@@ -178,8 +189,9 @@ class WordRow(_RowBase):
         btn_lay = QHBoxLayout(btn_box)
         btn_lay.setContentsMargins(0, 0, 0, 0)
         btn_lay.setSpacing(6)
-        for text, cb in (("掌握", on_mastered), ("生词本", on_vocab)):
+        for text, cb in (("掌握", on_mastered), ("隐藏", on_hide)):
             btn = QPushButton(text)
+            btn.setFixedWidth(64)  # 统一宽度，避免布局变动
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _=False, c=entry.canonical, f=cb: f(c))
             btn_lay.addWidget(btn)
@@ -379,8 +391,11 @@ class MainWindow(QMainWindow):
         clear_btn = QPushButton("清空列表")
         clear_btn.clicked.connect(self._clear_list)
         master_btn = QPushButton("全部掌握")
-        master_btn.clicked.connect(self._mark_all_mastered)
-        for b in (clear_btn, master_btn):
+        master_btn.clicked.connect(lambda: self._mark_all_mastered(include_vocab=True))
+        master_nv_btn = QPushButton("全部掌握（不含生词）")
+        master_nv_btn.setToolTip("只把不在生词本中的词加入已掌握，生词保留在列表")
+        master_nv_btn.clicked.connect(lambda: self._mark_all_mastered(include_vocab=False))
+        for b in (clear_btn, master_btn, master_nv_btn):
             b.setCursor(Qt.PointingHandCursor)
             tools.addWidget(b)
         vbox.addLayout(tools)
@@ -451,10 +466,12 @@ class MainWindow(QMainWindow):
     # ---- 识别流 ----
     def add_entries(self, entries: list) -> None:
         for entry in entries:
+            in_vocab = self.store.is_vocab(entry.canonical)
             row = WordRow(
                 entry,
+                in_vocab,
                 on_mastered=self._mark(entry.canonical, "mastered"),
-                on_vocab=self._mark(entry.canonical, "vocab"),
+                on_hide=self._hide_stream_word,
                 on_speak=self.tts.speak,
             )
             item = QListWidgetItem()
@@ -474,6 +491,11 @@ class MainWindow(QMainWindow):
             self._update_counts()
         return handler
 
+    def _hide_stream_word(self, canonical: str) -> None:
+        """识别页隐藏：仅从列表移除并清除本会话记录，不改任何状态（只生效一次）。"""
+        self.store.reset_shown_word(canonical)
+        self.remove_word(canonical)
+
     def remove_word(self, canonical: str) -> None:
         for i in range(self.list.count()):
             row = self.list.itemWidget(self.list.item(i))
@@ -485,16 +507,25 @@ class MainWindow(QMainWindow):
         self.list.clear()
         self.store.reset_shown()
 
-    def _mark_all_mastered(self) -> None:
+    def _mark_all_mastered(self, include_vocab: bool = True) -> None:
         n = 0
+        removed_rows = []
         for i in range(self.list.count()):
             row = self.list.itemWidget(self.list.item(i))
-            if isinstance(row, WordRow):
-                self.store.set_status(row.canonical, "mastered")
-                n += 1
-        self.list.clear()
+            if not isinstance(row, WordRow):
+                continue
+            if not include_vocab and row.in_vocab:
+                continue  # 生词保留在列表
+            self.store.set_status(row.canonical, "mastered")
+            removed_rows.append(i)
+            n += 1
+        for i in reversed(removed_rows):
+            self.list.takeItem(i)
         self._update_counts()
-        self.statusBar().showMessage(f"已将 {n} 个词加入已掌握", 5000)
+        msg = f"已将 {n} 个词加入已掌握"
+        if not include_vocab:
+            msg += "（生词已保留）"
+        self.statusBar().showMessage(msg, 5000)
 
     # ---- 词库 ----
     def _refresh_vocab(self, status: str) -> None:
