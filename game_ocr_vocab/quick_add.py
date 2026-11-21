@@ -1,6 +1,8 @@
 """全局热键唤起的快速查词弹窗：极简卡片、自动获焦、实时过滤识别页单词、回车加入生词本。"""
 
-from PySide6.QtCore import Qt
+import ctypes
+
+from PySide6.QtCore import QEvent, Qt
 from PySide6.QtGui import QColor, QGuiApplication
 from PySide6.QtWidgets import (
     QDialog,
@@ -49,6 +51,7 @@ class QuickAddDialog(QDialog):
         self.edit = QLineEdit()
         self.edit.setPlaceholderText("输入单词或翻译…   ↑↓ 选择   Enter 加入生词本   Esc 关闭")
         self.edit.textChanged.connect(self._refill)
+        self.edit.installEventFilter(self)  # 焦点在输入框时可靠拦截 ↑↓/Enter/Esc
         lay.addWidget(self.edit)
         self.listw = QListWidget()
         self.listw.setMaximumHeight(LIST_MAX_H)
@@ -57,33 +60,58 @@ class QuickAddDialog(QDialog):
         outer.addWidget(card)
         self.setFixedWidth(CARD_W + 36)
         self._entries: list[str] = []  # canonical 列表（与行对应）
+        self._prev_hwnd: int | None = None
 
-    # ---- 按键：上下切换、回车提交 ----
-    def keyPressEvent(self, event) -> None:
-        key = event.key()
+    # ---- 按键处理 ----
+    def _handle_key(self, key) -> bool:
         if key == Qt.Key_Down:
             row = self.listw.currentRow()
             if row < self.listw.count() - 1:
                 self.listw.setCurrentRow(row + 1)
-            return
+            return True
         if key == Qt.Key_Up:
             row = self.listw.currentRow()
             if row > 0:
                 self.listw.setCurrentRow(row - 1)
-            return
-        if key in (Qt.Key_Escape,):
-            self.hide()
-            return
+            return True
+        if key == Qt.Key_Escape:
+            self._dismiss()
+            return True
         if key in (Qt.Key_Return, Qt.Key_Enter):
             self._commit_current()
+            return True
+        return False
+
+    def eventFilter(self, obj, ev) -> bool:
+        if obj is self.edit and ev.type() == QEvent.KeyPress and self._handle_key(ev.key()):
+            return True
+        return super().eventFilter(obj, ev)
+
+    def keyPressEvent(self, event) -> None:
+        if self._handle_key(event.key()):
             return
         super().keyPressEvent(event)
 
     def focusOutEvent(self, event) -> None:
+        self.hide()  # 用户点击了别处：不打回焦点
+
+    def _dismiss(self) -> None:
+        """关闭弹窗并尝试把焦点还给弹出前的窗口（如游戏）。"""
+        prev = self._prev_hwnd
         self.hide()
+        if prev:
+            try:
+                ctypes.windll.user32.SetForegroundWindow(prev)
+                ctypes.windll.user32.SetActiveWindow(prev)
+            except Exception:
+                pass
 
     # ---- 展示与数据 ----
     def popup(self) -> None:
+        try:
+            self._prev_hwnd = ctypes.windll.user32.GetForegroundWindow()
+        except Exception:
+            self._prev_hwnd = None
         self.edit.clear()
         self._refill("")
         self.show()
@@ -124,5 +152,5 @@ class QuickAddDialog(QDialog):
         if row < 0 or row >= len(self._entries):
             return
         canonical = self._entries[row]
-        self.hide()
         self._win.add_to_vocab(canonical)
+        self._dismiss()
