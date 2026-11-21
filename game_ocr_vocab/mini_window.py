@@ -41,9 +41,11 @@ QListWidget::item { border: none; }
 QListWidget::item:selected { background: transparent; }
 #miniRow { background: transparent; border-radius: 8px; }
 #miniRow:hover { background: rgba(255, 255, 255, 0.09); }
-QScrollBar:vertical { width: 4px; background: transparent; }
-QScrollBar::handle:vertical { background: rgba(255,255,255,0.18); border-radius: 2px; min-height: 24px; }
+QScrollBar:vertical { width: 6px; background: rgba(0, 0, 0, 0.25); border-radius: 3px; margin: 2px 0; }
+QScrollBar::handle:vertical { background: rgba(255, 255, 255, 0.65); border-radius: 3px; min-height: 24px; }
+QScrollBar::handle:vertical:hover { background: rgba(255, 255, 255, 0.85); }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 """
 
 
