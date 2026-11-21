@@ -3,9 +3,10 @@
 交互：滚轮滚动列表；左键点行=掌握；右键点行=加入生词本；顶部「完整模式」返回。
 """
 
-from PySide6.QtCore import Qt
-from PySide6.QtGui import QColor, QGuiApplication
+from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
+from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (
+    QGraphicsOpacityEffect,
     QHBoxLayout,
     QLabel,
     QListWidget,
@@ -35,6 +36,11 @@ QPushButton:hover { background: rgba(255,255,255,0.20); }
 QListWidget { border: none; background: transparent; outline: none; }
 QListWidget::item { border: none; }
 QListWidget::item:selected { background: transparent; }
+#miniRow { background: transparent; border-radius: 8px; }
+#miniRow:hover { background: rgba(255, 255, 255, 0.09); }
+QScrollBar:vertical { width: 4px; background: transparent; }
+QScrollBar::handle:vertical { background: rgba(255,255,255,0.18); border-radius: 2px; min-height: 24px; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 """
 
 
@@ -46,6 +52,10 @@ class MiniRow(QWidget):
         self.canonical = canonical
         self._on_master = on_master
         self._on_vocab = on_vocab
+        self._leaving = False
+        self._anim = None
+        self.setObjectName("miniRow")
+        self.setAttribute(Qt.WA_StyledBackground, True)  # 让 QSS 背景作用于整行而非仅文字
         lay = QVBoxLayout(self)
         lay.setContentsMargins(10, 5, 10, 5)
         lay.setSpacing(1)
@@ -69,16 +79,32 @@ class MiniRow(QWidget):
         self.setToolTip(f"{word}\n左键：已掌握　右键：加入生词本")
 
     def mousePressEvent(self, event) -> None:
+        if self._leaving:
+            return
         if event.button() == Qt.LeftButton:
-            self._on_master(self.canonical)
+            self._animate_out(-1, lambda: self._on_master(self.canonical))
         elif event.button() == Qt.RightButton:
-            self._on_vocab(self.canonical)
+            self._animate_out(1, lambda: self._on_vocab(self.canonical))
 
-    def enterEvent(self, event) -> None:
-        self.setStyleSheet("background: rgba(255,255,255,0.08); border-radius: 8px;")
-
-    def leaveEvent(self, event) -> None:
-        self.setStyleSheet("")
+    def _animate_out(self, direction: int, done) -> None:
+        """左键向左滑出、右键向右滑出（淡出），动画结束后再执行操作触发列表刷新。"""
+        self._leaving = True
+        effect = QGraphicsOpacityEffect(self)
+        self.setGraphicsEffect(effect)
+        anim = QPropertyAnimation(self, b"pos", self)
+        anim.setDuration(220)
+        anim.setStartValue(self.pos())
+        anim.setEndValue(self.pos() + QPoint(direction * (self.width() + 60), 0))
+        anim.setEasingCurve(QEasingCurve.InCubic)
+        fade = QPropertyAnimation(effect, b"opacity", self)
+        fade.setDuration(220)
+        fade.setStartValue(1.0)
+        fade.setEndValue(0.0)
+        anim.finished.connect(done)
+        self._anim = anim
+        self._fade = fade
+        anim.start(QPropertyAnimation.DeleteWhenStopped)
+        fade.start(QPropertyAnimation.DeleteWhenStopped)
 
 
 class MiniWindow(QWidget):
@@ -140,6 +166,8 @@ class MiniWindow(QWidget):
     def refresh(self) -> None:
         from .main_window import WordRow
 
+        sb = self.listw.verticalScrollBar()
+        was_at_bottom = sb.maximum() <= 0 or sb.value() >= sb.maximum() - 4
         self.listw.clear()
         for i in range(self._win.list.count()):
             row = self._win.list.itemWidget(self._win.list.item(i))
@@ -157,6 +185,21 @@ class MiniWindow(QWidget):
             item.setSizeHint(mini.sizeHint())
             self.listw.addItem(item)
             self.listw.setItemWidget(item, mini)
+        if was_at_bottom and self.listw.count():
+            QTimer.singleShot(0, self._smooth_scroll_bottom)
+
+    def _smooth_scroll_bottom(self) -> None:
+        """平滑缓慢滚动到底部（新词追加时跟随）。"""
+        sb = self.listw.verticalScrollBar()
+        if sb.maximum() <= 0:
+            return
+        anim = QPropertyAnimation(sb, b"value", self)
+        anim.setDuration(500)
+        anim.setStartValue(sb.value())
+        anim.setEndValue(sb.maximum())
+        anim.setEasingCurve(QEasingCurve.OutCubic)
+        self._scroll_anim = anim  # 防回收
+        anim.start(QPropertyAnimation.DeleteWhenStopped)
 
     def show_at(self) -> None:
         screen = QGuiApplication.primaryScreen().geometry()
