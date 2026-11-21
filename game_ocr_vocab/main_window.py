@@ -189,13 +189,19 @@ class WordRow(_RowBase):
         btn_lay = QHBoxLayout(btn_box)
         btn_lay.setContentsMargins(0, 0, 0, 0)
         btn_lay.setSpacing(6)
-        # 第二按钮：生词显示「隐藏」（仅本次隐藏），普通词显示「生词本」；宽度统一
+        # 第一按钮：掌握；第二按钮：普通词「生词本」/ 生词「隐藏」（仅本次隐藏）；宽度统一防布局跳动
+        master_btn = QPushButton("掌握")
+        master_btn.setFixedWidth(72)
+        master_btn.setToolTip("加入已掌握，之后不再出现")
+        master_btn.setCursor(Qt.PointingHandCursor)
+        master_btn.clicked.connect(lambda _=False, c=entry.canonical: on_mastered(c))
+        btn_lay.addWidget(master_btn)
         if in_vocab:
             second = ("隐藏", on_hide, "仅从本次列表隐藏，下次出现会再次显示")
         else:
             second = ("生词本", on_vocab, "加入生词本")
         second_btn = QPushButton(second[0])
-        second_btn.setFixedWidth(64)
+        second_btn.setFixedWidth(72)
         second_btn.setToolTip(second[2])
         second_btn.setCursor(Qt.PointingHandCursor)
         second_btn.clicked.connect(lambda _=False, c=entry.canonical, f=second[1]: f(c))
