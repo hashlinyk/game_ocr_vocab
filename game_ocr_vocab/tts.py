@@ -3,8 +3,11 @@
 专用线程 + 队列（连点只保留最新），同步播报。
 """
 
+import os
 import queue
+import shutil
 import threading
+from pathlib import Path
 
 from . import config
 from .logutil import get_logger
@@ -48,18 +51,73 @@ class TtsSpeaker:
             log.debug("piper 模型缺失，回退 SAPI")
             return None
         try:
-            str(model).encode("ascii")
-        except UnicodeEncodeError:
-            log.debug("警告：程序路径含非 ASCII 字符，piper espeak 层可能无法工作，回退 SAPI")
-            return None
-        try:
             from piper import PiperVoice
+            import piper.phonemize_espeak as pe
+            import piper.voice as pv
 
-            voice = PiperVoice.load(str(model))
-            log.debug(f"piper ready: {model.name}")
+            # espeak 层不支持非 ASCII 路径（中文目录会卡死/崩溃）：
+            # 计算 ASCII 数据目录，并替换 piper 内部全部三处 ESPEAK_DATA_DIR 绑定
+            old_dir = Path(pe.ESPEAK_DATA_DIR)
+            espeak_dir = self._ascii_espeak_dir(old_dir)
+            model_ascii = self._to_ascii_path(model)
+            if espeak_dir is None:
+                log.debug("espeak 数据目录无法 ASCII 化，回退 SAPI")
+                return None
+
+            def patch_defaults(func, old: Path, new: Path) -> None:
+                if func is not None and func.__defaults__:
+                    func.__defaults__ = tuple(new if d == old else d for d in func.__defaults__)
+
+            for mod in (pe, pv):
+                mod.ESPEAK_DATA_DIR = espeak_dir
+            patch_defaults(pe.EspeakPhonemizer.__init__, old_dir, espeak_dir)
+            patch_defaults(pv.PiperVoice.load, old_dir, espeak_dir)
+            patch_defaults(pv.PiperVoice.__init__, old_dir, espeak_dir)
+            pv.PiperVoice.espeak_data_dir = espeak_dir
+
+            voice = PiperVoice.load(str(model_ascii if model_ascii else model))
+            log.debug(f"piper ready: {model.name} (espeak_dir_ascii={espeak_dir})")
             return voice
         except Exception as exc:
             log.debug(f"piper load failed: {exc}")
+            return None
+
+    @staticmethod
+    def _to_ascii_path(p: Path) -> Path | None:
+        """路径已是 ASCII 则原样返回；否则尝试 8.3 短路径；都不行返回 None。"""
+        try:
+            str(p).encode("ascii")
+            return p
+        except UnicodeEncodeError:
+            pass
+        try:
+            import ctypes
+
+            buf = ctypes.create_unicode_buffer(1024)
+            if ctypes.windll.kernel32.GetShortPathNameW(str(p), buf, 1024):
+                short = Path(buf.value)
+                str(short).encode("ascii")
+                return short
+        except Exception:
+            pass
+        return None
+
+    @staticmethod
+    def _ascii_espeak_dir(data_dir: Path) -> Path | None:
+        """获取 espeak-ng-data 的 ASCII 可用路径：短路径优先，失败则复制到英文系统目录。"""
+        ascii_dir = TtsSpeaker._to_ascii_path(data_dir)
+        if ascii_dir is not None:
+            return ascii_dir
+        # 8.3 短路径不可用（卷禁用/名字太短无短名）：复制到 %PROGRAMDATA%（全英文）
+        dest = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "GameOcrVocab" / "espeak-ng-data"
+        try:
+            if not dest.exists() or not any(dest.iterdir()):
+                shutil.copytree(data_dir, dest, dirs_exist_ok=True)
+            str(dest).encode("ascii")
+            log.debug(f"espeak-ng-data copied to {dest}")
+            return dest
+        except Exception as exc:
+            log.debug(f"copy espeak-ng-data failed: {exc}")
             return None
 
     def _load_sapi(self):

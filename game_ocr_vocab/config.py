@@ -41,6 +41,7 @@ OUTSIDE_DIFF_RATIO = 0.005  # 旧文本框之外变化占比(膨胀后)超过此
 # ---- UI ----
 POLL_MS = 200
 DEBUG_SAVE_FRAMES = True   # 把每次触发 OCR 的帧存到 data/debug/（t0001_change_r0.83.png）
+DEBUG_KEEP = 50            # debug 帧最多保留张数，超出自动删最旧
 DEBUG_LOG = True           # 写 data/app.log：触发原因/差异度/OCR 耗时
 
 # ---- 拆词 ----
