@@ -134,6 +134,7 @@ class SettingsDialog(QDialog):
         reset_btn.setToolTip("恢复全部默认快捷键")
         reset_btn.clicked.connect(self._reset)
         apply_btn = QPushButton("应用")
+        apply_btn.setObjectName("primaryBtn")
         apply_btn.clicked.connect(self._apply)
         bottom.addWidget(reset_btn)
         bottom.addStretch()

@@ -26,9 +26,11 @@ def check_prereqs() -> str | None:
 def main() -> int:
     from PySide6.QtGui import QFont
 
+    from .main_window import THEME_QSS
+
     app = QApplication(sys.argv)
     app.setFont(QFont("Microsoft YaHei UI", 12))
-    app.setStyleSheet("QPushButton { padding: 5px 12px; } QListWidget { font-size: 12pt; }")
+    app.setStyleSheet(THEME_QSS)
 
     err = check_prereqs()
     if err:

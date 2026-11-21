@@ -27,10 +27,71 @@ WORD_TRANS_SPACING = 10  # 单词行与释义行间距
 VOCAB_PAGE = 10          # 词库懒加载每批行数
 
 RUN_STATES = {
-    "idle": ("未开始识别", "#999999"),
-    "running": ("持续识别中", "#2e8b57"),
-    "paused": ("已暂停", "#e67e22"),
+    "idle": ("未开始识别", "#6b7280", "#eef0f4"),
+    "running": ("持续识别中", "#177245", "#e3f6ec"),
+    "paused": ("已暂停", "#9a6200", "#fdf1dc"),
 }
+
+THEME_QSS = """
+QMainWindow, QDialog { background: #f3f5f9; }
+QLabel { color: #2b2d33; }
+
+QPushButton {
+    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
+    padding: 5px 12px; color: #3a3f4b;
+}
+QPushButton:hover { background: #f0f4ff; border-color: #b8c6ff; }
+QPushButton:pressed { background: #e4ebff; }
+QPushButton:disabled { color: #b0b4be; background: #f5f6f8; border-color: #e8eaef; }
+QPushButton#primaryBtn { background: #4f6ef7; color: #ffffff; border: none; font-weight: bold; }
+QPushButton#primaryBtn:hover { background: #3f5ce4; }
+QPushButton#primaryBtn:pressed { background: #3450d4; }
+QPushButton#primaryBtn:disabled { background: #bcc8fb; color: #ffffff; }
+
+QLineEdit, QComboBox, QKeySequenceEdit {
+    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
+    padding: 6px 10px; color: #2b2d33; selection-background-color: #cdd9ff;
+}
+QLineEdit:focus, QComboBox:focus, QKeySequenceEdit:focus { border-color: #4f6ef7; }
+QComboBox::drop-down { border: none; width: 24px; }
+QComboBox QAbstractItemView {
+    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
+    selection-background-color: #eef2ff; selection-color: #2b2d33; outline: none;
+}
+
+QTabWidget::pane { border: none; background: transparent; top: -1px; }
+QTabBar::tab {
+    background: transparent; color: #6b7280; padding: 8px 18px;
+    margin-right: 4px; border-radius: 9px;
+}
+QTabBar::tab:selected {
+    background: #ffffff; color: #1f2430; font-weight: bold;
+    border: 1px solid #e3e8f0;
+}
+QTabBar::tab:hover:!selected { color: #2b2d33; }
+
+QListWidget {
+    background: #ffffff; border: 1px solid #e6eaf2; border-radius: 12px; padding: 4px;
+}
+QListWidget::item { border-bottom: 1px solid #f2f4f8; }
+QListWidget::item:selected { background: transparent; }
+#wordRow { background: transparent; border-radius: 8px; }
+#wordRow:hover { background: #f7f9ff; }
+
+QScrollBar:vertical { width: 8px; background: transparent; margin: 2px; }
+QScrollBar::handle:vertical { background: #cfd6e4; border-radius: 4px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: #aab5cc; }
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
+
+QStatusBar { color: #8a92a3; background: transparent; }
+QToolTip {
+    background: #2b2d33; color: #ffffff; border: none; padding: 4px 8px; border-radius: 6px;
+}
+QMenu { background: #ffffff; border: 1px solid #e3e8f0; border-radius: 8px; padding: 4px; }
+QMenu::item { padding: 6px 20px; border-radius: 6px; }
+QMenu::item:selected { background: #eef2ff; }
+"""
 
 
 def _flat_btn(style: QStyle, icon: QStyle.StandardPixmap, tooltip: str, close=False) -> QPushButton:
@@ -56,11 +117,14 @@ class TitleBar(QWidget):
         self._drag_offset: QPoint | None = None
         self.setFixedHeight(36)
 
+        self.setStyleSheet(
+            "TitleBar { background: #ffffff; border-bottom: 1px solid #e6eaf2; }"
+        )
         lay = QHBoxLayout(self)
         lay.setContentsMargins(12, 0, 2, 0)
         lay.setSpacing(2)
         title = QLabel("游戏单词助手")
-        title.setStyleSheet("font-size: 13px; color: #555;")
+        title.setStyleSheet("font-size: 13px; color: #3a3f4b; font-weight: bold;")
         lay.addWidget(title)
         lay.addStretch()
 
@@ -195,6 +259,8 @@ class WordRow(_RowBase):
         super().__init__()
         self.canonical = entry.canonical
         self.in_vocab = in_vocab
+        self.setObjectName("wordRow")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
 
@@ -264,6 +330,8 @@ class VocabRow(_RowBase):
     def __init__(self, entry: WordEntry, move_label, on_move, on_remove, on_speak):
         super().__init__()
         self.canonical = entry.canonical
+        self.setObjectName("wordRow")
+        self.setAttribute(Qt.WA_StyledBackground, True)
         layout = QHBoxLayout(self)
         layout.setContentsMargins(8, 4, 8, 4)
 
@@ -388,8 +456,8 @@ class MainWindow(QMainWindow):
         vbox.addWidget(self.titlebar)
 
         inner = QVBoxLayout()
-        inner.setContentsMargins(10, 8, 10, 8)
-        inner.setSpacing(8)
+        inner.setContentsMargins(14, 10, 14, 10)
+        inner.setSpacing(10)
         top = QHBoxLayout()
         self.capture_combo = QComboBox()
         self.capture_combo.setToolTip("选择识别方式")
@@ -398,14 +466,19 @@ class MainWindow(QMainWindow):
         self.capture_combo.addItem("框选识别区域")
         self.capture_combo.activated.connect(self._on_capture_mode)
         self.state_label = QLabel("未开始识别")
-        self.state_label.setStyleSheet("color: #999999; font-weight: bold;")
         self.pause_btn = QPushButton("开始识别")
+        self.pause_btn.setObjectName("primaryBtn")
         self.pause_btn.setEnabled(False)
         self.pause_btn.clicked.connect(self._toggle_pause)
+        self.set_run_state("idle")  # 胶囊样式
         self.region_label = QLabel("未选择区域")
         self.region_label.setStyleSheet("color: gray;")
         self.region_label.setVisible(False)  # 仅选中「框选识别区域」时显示
         self.count_label = QLabel("")
+        self.count_label.setStyleSheet(
+            "color: #4f6ef7; background: #eef2ff; border-radius: 10px;"
+            " padding: 3px 10px; font-weight: bold;"
+        )
         self._update_counts()
         top.addWidget(self.capture_combo)
         top.addWidget(self.state_label)
@@ -427,9 +500,12 @@ class MainWindow(QMainWindow):
 
     def set_run_state(self, state: str) -> None:
         self._state = state
-        text, color = RUN_STATES.get(state, RUN_STATES["idle"])
+        text, fg, bg = RUN_STATES.get(state, RUN_STATES["idle"])
         self.state_label.setText(text)
-        self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+        self.state_label.setStyleSheet(
+            f"color: {fg}; background: {bg}; border-radius: 10px;"
+            " padding: 3px 10px; font-weight: bold;"
+        )
         if self._mini is not None and self._mini.isVisible():
             self._mini.set_state(state)
         if state == "idle":
