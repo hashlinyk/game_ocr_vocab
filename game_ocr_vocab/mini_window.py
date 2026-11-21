@@ -4,7 +4,7 @@
 """
 
 from PySide6.QtCore import QEasingCurve, QPoint, QPropertyAnimation, Qt, QTimer
-from PySide6.QtGui import QGuiApplication
+from PySide6.QtGui import QCursor, QGuiApplication
 from PySide6.QtWidgets import (
     QGraphicsOpacityEffect,
     QHBoxLayout,
@@ -20,9 +20,12 @@ MINI_W = 340
 MINI_H = 520
 STATE_COLORS = {"idle": "#777777", "running": "#3ddc84", "paused": "#ffb300"}
 
+CARD_BG_IDLE = "rgba(18, 18, 24, 0.35)"   # 默认更透明
+CARD_BG_HOVER = "rgba(18, 18, 24, 0.82)"  # 鼠标移入恢复
+
 CARD_QSS = """
 #miniCard {
-    background: rgba(18, 18, 24, 0.82);
+    background: rgba(18, 18, 24, 0.35);
     border-radius: 16px;
     border: 1px solid rgba(255, 255, 255, 0.10);
 }
@@ -121,6 +124,9 @@ class MiniWindow(QWidget):
         card = QWidget()
         card.setObjectName("miniCard")
         outer.addWidget(card)
+        self._card = card
+        self._card_bg = None
+        self._apply_card_bg(CARD_BG_IDLE)
 
         lay = QVBoxLayout(card)
         lay.setContentsMargins(12, 10, 12, 10)
@@ -145,6 +151,27 @@ class MiniWindow(QWidget):
         self.listw.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         lay.addWidget(self.listw, 1)
         self._drag_offset = None
+
+        # 鼠标悬停背景切换：轮询光标位置（enter/leave 在子控件间切换会误报）
+        self._hover_timer = QTimer(self)
+        self._hover_timer.setInterval(180)
+        self._hover_timer.timeout.connect(self._check_hover)
+        self._hover_timer.start()
+
+    def _apply_card_bg(self, color: str) -> None:
+        if self._card_bg == color:
+            return
+        self._card_bg = color
+        self._card.setStyleSheet(
+            f"#miniCard {{ background: {color}; border-radius: 16px;"
+            " border: 1px solid rgba(255, 255, 255, 0.10); }}"
+        )
+
+    def _check_hover(self) -> None:
+        if not self.isVisible():
+            return
+        inside = self.frameGeometry().contains(QCursor.pos())
+        self._apply_card_bg(CARD_BG_HOVER if inside else CARD_BG_IDLE)
 
     # ---- 拖动窗口（按住空白处拖动） ----
     def mousePressEvent(self, event) -> None:
