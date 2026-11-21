@@ -102,6 +102,11 @@ class CaptureWorker(QObject):
         self._mode = "region"
         self._hwnd = None
 
+    def force_trigger(self) -> None:
+        """强制下一可用帧触发 OCR（配合清空列表后重新识别）。"""
+        self._prev = None
+        self._force_next = True
+
     def stop(self) -> None:
         self._running = False
         self._stop_wgc()

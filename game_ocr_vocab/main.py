@@ -103,6 +103,10 @@ def main() -> int:
         win.set_run_state("idle")
         win.set_start_ready(False)
 
+    def on_clear_list() -> None:
+        ocr_worker.reset_snap()
+        capture_worker.force_trigger()
+
     main_dict = Dictionary()
     win = MainWindow(
         store, tts, on_region_selected,
@@ -110,6 +114,7 @@ def main() -> int:
         on_toggle_pause=on_toggle_pause,
         on_pick_window=on_window_selected,
         on_start=on_start,
+        on_clear_list=on_clear_list,
     )
     capture_worker.windowStopped.connect(on_window_stopped)
 

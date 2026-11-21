@@ -308,7 +308,7 @@ class WindowPickerDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary,
-                 on_toggle_pause=None, on_pick_window=None, on_start=None):
+                 on_toggle_pause=None, on_pick_window=None, on_start=None, on_clear_list=None):
         super().__init__()
         self.store = store
         self.tts = tts
@@ -317,6 +317,7 @@ class MainWindow(QMainWindow):
         self._on_toggle_pause = on_toggle_pause
         self._on_pick_window = on_pick_window
         self._on_start = on_start
+        self._on_clear_list = on_clear_list
         self._start_ready = False
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
@@ -565,6 +566,8 @@ class MainWindow(QMainWindow):
     def _clear_list(self) -> None:
         self.list.clear()
         self.store.reset_shown()
+        if self._on_clear_list is not None:
+            self._on_clear_list()  # 重置 OCR 预筛并强制下一帧识别，未掌握的词会重新追加
 
     def _mark_all_mastered(self, include_vocab: bool = True) -> None:
         n = 0
