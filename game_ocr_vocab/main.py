@@ -35,6 +35,7 @@ def main() -> int:
         QMessageBox.critical(None, "游戏单词助手", err)
         return 1
 
+    from . import config
     from .capture import CaptureWorker, FrameSource
     from .dictionary import Dictionary
     from .ocr_worker import OcrWorker
@@ -103,6 +104,11 @@ def main() -> int:
         win.set_run_state("idle")
         win.set_start_ready(False)
 
+    def open_settings() -> None:
+        from .settings_dialog import SettingsDialog
+
+        SettingsDialog(manager, win).exec()
+
     main_dict = Dictionary()
     win = MainWindow(
         store, tts, on_region_selected,
@@ -110,25 +116,26 @@ def main() -> int:
         on_toggle_pause=on_toggle_pause,
         on_pick_window=on_window_selected,
         on_start=on_start,
+        on_settings=open_settings,
     )
     capture_worker.windowStopped.connect(on_window_stopped)
 
-    # 全局热键（无论焦点在哪）：
-    #   Ctrl+Alt+Shift+F 快速查词弹窗
-    #   Ctrl+Alt+Shift+C 全部掌握
-    #   Ctrl+Alt+Shift+X 全部掌握（不含生词）
-    from .hotkey import install_hotkey, uninstall_hotkey, MOD_ALT, MOD_CONTROL, MOD_SHIFT
+    # 全局热键（无论焦点在哪，可在设置中自定义）：
+    #   Ctrl+Alt+Shift+F 快速查词 / C 全部掌握 / X 全部掌握（不含生词）
+    from .hotkey import HotkeyManager, MOD_ALT, MOD_CONTROL, MOD_SHIFT
     from .quick_add import QuickAddDialog
 
     quick_add = QuickAddDialog(win)
-    HOTKEYS = (
-        (0x9A31, ord("F"), "快速查词", quick_add.popup),
-        (0x9A32, ord("C"), "全部掌握", lambda: win._mark_all_mastered(include_vocab=True)),
-        (0x9A33, ord("X"), "全部掌握（不含生词）", lambda: win._mark_all_mastered(include_vocab=False)),
+    manager = HotkeyManager(app, config.DATA_DIR / "settings.json")
+    MODS = MOD_ALT | MOD_CONTROL | MOD_SHIFT
+    HOTKEY_DEFS = (
+        ("quick_add", "快速查词", MODS, ord("F"), quick_add.popup),
+        ("master_all", "全部掌握", MODS, ord("C"), lambda: win._mark_all_mastered(include_vocab=True)),
+        ("master_nv", "全部掌握（不含生词）", MODS, ord("X"), lambda: win._mark_all_mastered(include_vocab=False)),
     )
-    for hk_id, vk, label, cb in HOTKEYS:
-        if not install_hotkey(app, hk_id, MOD_ALT | MOD_CONTROL | MOD_SHIFT, vk, cb):
-            win.show_error(f"全局热键 Ctrl+Alt+Shift+{chr(vk)}（{label}）注册失败（可能已被其他程序占用）")
+    for slug, display, mods, vk, cb in HOTKEY_DEFS:
+        if not manager.define(slug, display, mods, vk, cb):
+            win.show_error(f"全局热键（{display}）注册失败，可能已被其他程序占用，可在设置中修改")
 
     ocr_worker.wordsFound.connect(win.add_entries)
     ocr_worker.ocrError.connect(win.show_error)
@@ -156,8 +163,7 @@ def main() -> int:
     tts.stop()
     store.close()
     main_dict.close()
-    for hk_id, _vk, _label, _cb in HOTKEYS:
-        uninstall_hotkey(hk_id)
+    manager.shutdown()
     return ret
 
 

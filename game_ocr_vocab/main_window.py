@@ -47,9 +47,9 @@ def _flat_btn(style: QStyle, icon: QStyle.StandardPixmap, tooltip: str, close=Fa
 
 
 class TitleBar(QWidget):
-    """自绘标题栏：置顶图钉按钮在系统按钮（最小化/最大化/关闭）左侧，支持拖拽移动窗口。"""
+    """自绘标题栏：设置/置顶按钮在系统按钮（最小化/最大化/关闭）左侧，支持拖拽移动窗口。"""
 
-    def __init__(self, win: "MainWindow"):
+    def __init__(self, win: "MainWindow", on_settings=None):
         super().__init__()
         self._win = win
         self._drag_offset: QPoint | None = None
@@ -62,6 +62,19 @@ class TitleBar(QWidget):
         title.setStyleSheet("font-size: 13px; color: #555;")
         lay.addWidget(title)
         lay.addStretch()
+
+        self.settings_btn = QPushButton()
+        self.settings_btn.setFixedSize(38, 30)
+        self.settings_btn.setToolTip("设置")
+        self.settings_btn.setCursor(Qt.PointingHandCursor)
+        self.settings_btn.setIcon(self._gear_icon())
+        self.settings_btn.setStyleSheet(
+            "QPushButton { border: none; background: transparent; border-radius: 4px; }"
+            "QPushButton:hover { background: rgba(0,0,0,14); }"
+        )
+        if on_settings is not None:
+            self.settings_btn.clicked.connect(on_settings)
+        lay.addWidget(self.settings_btn)
 
         self.pin_btn = QPushButton()
         self.pin_btn.setCheckable(True)
@@ -87,6 +100,27 @@ class TitleBar(QWidget):
         close_btn = _flat_btn(style, QStyle.StandardPixmap.SP_TitleBarCloseButton, "关闭", close=True)
         close_btn.clicked.connect(win.close)
         lay.addWidget(close_btn)
+
+    def _gear_icon(self) -> QPixmap:
+        import math
+
+        pm = QPixmap(32, 32)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        c = QColor("#9a9a9a")
+        p.setPen(QPen(c, 2.4))
+        cx, cy, r = 16, 16, 6
+        p.drawEllipse(QRect(cx - r, cy - r, r * 2, r * 2))
+        for i in range(8):
+            ang = math.radians(i * 45)
+            r1, r2 = 8, 12
+            p.drawLine(
+                int(cx + r1 * math.cos(ang)), int(cy + r1 * math.sin(ang)),
+                int(cx + r2 * math.cos(ang)), int(cy + r2 * math.sin(ang)),
+            )
+        p.end()
+        return pm
 
     def _pin_icon(self, active: bool) -> QPixmap:
         pm = QPixmap(32, 32)
@@ -308,7 +342,7 @@ class WindowPickerDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary,
-                 on_toggle_pause=None, on_pick_window=None, on_start=None):
+                 on_toggle_pause=None, on_pick_window=None, on_start=None, on_settings=None):
         super().__init__()
         self.store = store
         self.tts = tts
@@ -332,7 +366,7 @@ class MainWindow(QMainWindow):
         vbox = QVBoxLayout(central)
         vbox.setContentsMargins(0, 0, 0, 0)
         vbox.setSpacing(0)
-        self.titlebar = TitleBar(self)
+        self.titlebar = TitleBar(self, on_settings)
         vbox.addWidget(self.titlebar)
 
         inner = QVBoxLayout()
