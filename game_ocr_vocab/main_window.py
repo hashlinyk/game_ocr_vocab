@@ -63,6 +63,18 @@ class TitleBar(QWidget):
         lay.addWidget(title)
         lay.addStretch()
 
+        self.mini_btn = QPushButton("mini")
+        self.mini_btn.setFixedSize(46, 26)
+        self.mini_btn.setToolTip("切换到 mini 悬浮模式")
+        self.mini_btn.setCursor(Qt.PointingHandCursor)
+        self.mini_btn.setStyleSheet(
+            "QPushButton { border: none; background: rgba(0,0,0,10); border-radius: 8px;"
+            " color: #666; font-size: 11px; font-weight: bold; }"
+            "QPushButton:hover { background: rgba(0,0,0,24); }"
+        )
+        self.mini_btn.clicked.connect(lambda: self._win._enter_mini())
+        lay.addWidget(self.mini_btn)
+
         self.settings_btn = QPushButton()
         self.settings_btn.setFixedSize(38, 30)
         self.settings_btn.setToolTip("设置")
@@ -352,6 +364,8 @@ class MainWindow(QMainWindow):
         self._on_pick_window = on_pick_window
         self._on_start = on_start
         self._start_ready = False
+        self._state = "idle"
+        self._mini = None
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
         self._vocab_pages = {}                     # status -> 全量词表（懒加载分批渲染）
@@ -408,9 +422,12 @@ class MainWindow(QMainWindow):
         self.statusBar().showMessage("点击「框选区域」选择要监视的屏幕区域（Esc 取消）")
 
     def set_run_state(self, state: str) -> None:
+        self._state = state
         text, color = RUN_STATES.get(state, RUN_STATES["idle"])
         self.state_label.setText(text)
         self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+        if self._mini is not None and self._mini.isVisible():
+            self._mini.set_state(state)
         if state == "idle":
             self.pause_btn.setText("开始识别")
             self.pause_btn.setEnabled(self._start_ready)
@@ -420,6 +437,20 @@ class MainWindow(QMainWindow):
         else:
             self.pause_btn.setText("暂停识别")
             self.pause_btn.setEnabled(True)
+
+    def _enter_mini(self) -> None:
+        from .mini_window import MiniWindow
+
+        if self._mini is None:
+            self._mini = MiniWindow(self)
+        self._mini.set_state(self._state)
+        self._mini.refresh()
+        self.hide()
+        self._mini.show_at()
+
+    def _notify_mini(self) -> None:
+        if self._mini is not None and self._mini.isVisible():
+            self._mini.refresh()
 
     def set_start_ready(self, ready: bool) -> None:
         """选定目标后启用『开始识别』按钮（此时尚未开始识别）。"""
@@ -573,6 +604,7 @@ class MainWindow(QMainWindow):
         if self.tabs.currentIndex() != 0:
             self._new_words += len(entries)
             self.tabs.setTabText(0, f"识别 ({self._new_words})")
+        self._notify_mini()
 
     def _mark(self, canonical: str, status: str):
         def handler(canonical: str) -> None:
@@ -605,10 +637,12 @@ class MainWindow(QMainWindow):
             if isinstance(row, WordRow) and row.canonical == canonical:
                 self.list.takeItem(i)
                 break
+        self._notify_mini()
 
     def _clear_list(self) -> None:
         self.list.clear()
         self.store.reset_shown()
+        self._notify_mini()
 
     def _mark_all_mastered(self, include_vocab: bool = True) -> None:
         n = 0
@@ -629,6 +663,7 @@ class MainWindow(QMainWindow):
             self.list.takeItem(i)
         self._vocab_dirty = {"mastered", "vocab"}  # 词库页数据已变化
         self._update_counts()
+        self._notify_mini()
         msg = f"已将 {n} 个词加入已掌握"
         if not include_vocab:
             msg += "（生词已保留）"

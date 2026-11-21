@@ -101,6 +101,11 @@ class HotkeyManager:
                 self._binding[slug] = old
         return False
 
+    def reset_defaults(self) -> None:
+        """全部恢复默认组合（只保存配置，注册由 resume 统一进行）。"""
+        for slug, (_hid, _display, dm, dv, _cb) in self._defs.items():
+            self.rebind(slug, dm, dv, register=False)
+
     def suspend(self) -> None:
         """临时注销全部热键（设置窗口录制按键期间，避免组合被全局热键抢占）。"""
         for slug, d in self._defs.items():

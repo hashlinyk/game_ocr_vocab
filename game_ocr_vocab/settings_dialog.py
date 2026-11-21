@@ -102,13 +102,27 @@ class SettingsDialog(QDialog):
             self._editors[slug] = (edit, state)
 
         vbox.addStretch()
+        bottom = QHBoxLayout()
+        reset_btn = QPushButton("重置")
+        reset_btn.setToolTip("恢复全部默认快捷键")
+        reset_btn.clicked.connect(self._reset)
         apply_btn = QPushButton("应用")
         apply_btn.clicked.connect(self._apply)
-        bottom = QHBoxLayout()
+        bottom.addWidget(reset_btn)
         bottom.addStretch()
         bottom.addWidget(apply_btn)
         vbox.addLayout(bottom)
         return page
+
+    def _reset(self) -> None:
+        ret = QMessageBox.question(self, "确认重置", "将所有快捷键恢复为默认组合？")
+        if ret != QMessageBox.Yes:
+            return
+        self.manager.reset_defaults()
+        for slug, (edit, state) in self._editors.items():
+            _display, mods, vk = self.manager.bindings()[slug]
+            edit.setKeySequence(_qt_seq_from(mods, vk))
+            state.setText(f"当前: {format_hotkey(mods, vk)}")
 
     def _apply(self) -> None:
         for slug, (edit, state) in self._editors.items():
