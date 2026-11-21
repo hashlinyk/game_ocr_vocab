@@ -225,7 +225,9 @@ class MiniWindow(QWidget):
 
         sb = self.listw.verticalScrollBar()
         prev_value = sb.value()
+        prev_count = self.listw.count()
         was_at_bottom = sb.maximum() <= 0 or prev_value >= sb.maximum() - 4
+        self.listw.setUpdatesEnabled(False)
         self.listw.clear()
         for i in range(self._win.list.count()):
             row = self._win.list.itemWidget(self._win.list.item(i))
@@ -243,15 +245,18 @@ class MiniWindow(QWidget):
             item.setSizeHint(mini.sizeHint())
             self.listw.addItem(item)
             self.listw.setItemWidget(item, mini)
-        if was_at_bottom and self.listw.count():
-            QTimer.singleShot(0, self._smooth_scroll_bottom)
-        elif not was_at_bottom:
-            # 用户主动滚动过：静默追加，保持原视图位置不变
-            def _restore():
-                cur = self.listw.verticalScrollBar()
-                cur.setValue(min(prev_value, cur.maximum()))
-
-            QTimer.singleShot(0, _restore)
+        new_count = self.listw.count()
+        append = new_count > prev_count
+        # clear() 会把滚动值归零：重建后立即同步恢复近似位置（同帧完成，不渲染“顶部帧”），
+        # 之后的动画/调整都基于该位置做最小滚动
+        if was_at_bottom and new_count and not append:
+            sb.setValue(sb.maximum())  # 删除行：直接贴住新底部
+            self.listw.setUpdatesEnabled(True)
+            return
+        sb.setValue(min(prev_value, sb.maximum()))  # 保持原视口位置（append 时即旧底部）
+        self.listw.setUpdatesEnabled(True)
+        if was_at_bottom and append:
+            QTimer.singleShot(0, self._smooth_scroll_bottom)  # 从当前位置小步平滑滚到新底部
 
     def _smooth_scroll_bottom(self) -> None:
         """平滑缓慢滚动到底部（新词追加时跟随）。"""
