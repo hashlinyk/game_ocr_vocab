@@ -52,23 +52,43 @@ def main() -> int:
     ocr_worker = OcrWorker(source, store)
     ocr_thread = _start_thread(ocr_worker)
 
+    pending: dict = {"kind": None, "arg": None}
+
     def on_region_selected(output_idx: int, region: tuple) -> None:
-        ocr_worker.reset_snap()
-        capture_worker.set_paused(False)
-        capture_worker.set_region(region, output_idx=output_idx)
+        """框选完成：仅登记目标，等待点击『开始识别』。"""
+        pending["kind"] = "region"
+        pending["arg"] = (output_idx, region)
         win.set_region_text(region)
-        win.set_run_state("running")
+        win.set_run_state("idle")
+        win.set_start_ready(True)
 
     def on_window_selected(hwnd: int, title: str) -> None:
+        """选择窗口：仅登记目标，等待点击『开始识别』。"""
+        pending["kind"] = "window"
+        pending["arg"] = hwnd
+        win.set_window_text(title)
+        win.set_run_state("idle")
+        win.set_start_ready(True)
+
+    def on_start() -> None:
+        if pending["kind"] is None:
+            return
         ocr_worker.reset_snap()
         capture_worker.set_paused(False)
-        capture_worker.set_window(hwnd)
-        win.set_window_text(title)
+        if pending["kind"] == "region":
+            capture_worker.set_region(*pending["arg"])
+        else:
+            capture_worker.set_window(pending["arg"])
         win.set_run_state("running")
 
     def on_toggle_pause(paused: bool) -> None:
         capture_worker.set_paused(paused)
         win.set_run_state("paused" if paused else "running")
+
+    def on_window_stopped() -> None:
+        pending["kind"] = None
+        win.set_run_state("idle")
+        win.set_start_ready(False)
 
     main_dict = Dictionary()
     win = MainWindow(
@@ -76,8 +96,9 @@ def main() -> int:
         dict_ref=main_dict,
         on_toggle_pause=on_toggle_pause,
         on_pick_window=on_window_selected,
+        on_start=on_start,
     )
-    capture_worker.windowStopped.connect(lambda: (win.set_run_state("idle"), win.set_region_text("未选择区域")))
+    capture_worker.windowStopped.connect(on_window_stopped)
 
     ocr_worker.wordsFound.connect(win.add_entries)
     ocr_worker.ocrError.connect(win.show_error)

@@ -3,9 +3,11 @@
 from PySide6.QtCore import QRect, QSize, Qt, QTimer, Signal
 from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
+    QComboBox,
     QDialog,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -305,7 +307,8 @@ class WindowPickerDialog(QDialog):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary, on_toggle_pause=None, on_pick_window=None):
+    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary,
+                 on_toggle_pause=None, on_pick_window=None, on_start=None):
         super().__init__()
         self.store = store
         self.tts = tts
@@ -313,9 +316,13 @@ class MainWindow(QMainWindow):
         self._on_region_selected = on_region_selected
         self._on_toggle_pause = on_toggle_pause
         self._on_pick_window = on_pick_window
+        self._on_start = on_start
+        self._start_ready = False
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
         self._vocab_pages = {}                     # status -> 全量词表（懒加载分批渲染）
+        self._vocab_filtered = {}                  # status -> 搜索过滤后的渲染列表
+        self._trans_cache = {}                     # word -> 翻译（搜索过滤用缓存）
         self.setWindowTitle("游戏单词助手")
         self.setWindowFlag(Qt.FramelessWindowHint)
         screen_w = self.screen().availableGeometry().width()
@@ -332,23 +339,23 @@ class MainWindow(QMainWindow):
         inner.setContentsMargins(10, 8, 10, 8)
         inner.setSpacing(8)
         top = QHBoxLayout()
-        win_btn = QPushButton("选择窗口")
-        win_btn.setToolTip("选定目标窗口，窗口移动/缩放自动跟随（优先推荐）")
-        win_btn.clicked.connect(self._pick_window)
-        pick_btn = QPushButton("框选识别区域")
-        pick_btn.setToolTip("全屏遮罩拖拽框出固定区域")
-        pick_btn.clicked.connect(self._pick_region)
+        self.capture_combo = QComboBox()
+        self.capture_combo.setToolTip("选择识别方式")
+        self.capture_combo.addItem("选择识别方式…")
+        self.capture_combo.addItem("选择窗口")
+        self.capture_combo.addItem("框选识别区域")
+        self.capture_combo.activated.connect(self._on_capture_mode)
         self.state_label = QLabel("未开始识别")
         self.state_label.setStyleSheet("color: #999999; font-weight: bold;")
-        self.pause_btn = QPushButton("暂停识别")
+        self.pause_btn = QPushButton("开始识别")
         self.pause_btn.setEnabled(False)
         self.pause_btn.clicked.connect(self._toggle_pause)
         self.region_label = QLabel("未选择区域")
         self.region_label.setStyleSheet("color: gray;")
+        self.region_label.setVisible(False)  # 仅选中「框选识别区域」时显示
         self.count_label = QLabel("")
         self._update_counts()
-        top.addWidget(win_btn)
-        top.addWidget(pick_btn)
+        top.addWidget(self.capture_combo)
         top.addWidget(self.state_label)
         top.addWidget(self.pause_btn)
         top.addWidget(self.region_label, 1)
@@ -370,8 +377,28 @@ class MainWindow(QMainWindow):
         text, color = RUN_STATES.get(state, RUN_STATES["idle"])
         self.state_label.setText(text)
         self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
-        self.pause_btn.setText("继续识别" if state == "paused" else "暂停识别")
-        self.pause_btn.setEnabled(state != "idle")
+        if state == "idle":
+            self.pause_btn.setText("开始识别")
+            self.pause_btn.setEnabled(self._start_ready)
+        elif state == "paused":
+            self.pause_btn.setText("继续识别")
+            self.pause_btn.setEnabled(True)
+        else:
+            self.pause_btn.setText("暂停识别")
+            self.pause_btn.setEnabled(True)
+
+    def set_start_ready(self, ready: bool) -> None:
+        """选定目标后启用『开始识别』按钮（此时尚未开始识别）。"""
+        self._start_ready = ready
+        if self.state_label.text() == RUN_STATES["idle"][0]:
+            self.pause_btn.setEnabled(ready)
+
+    def _on_capture_mode(self, idx: int) -> None:
+        self.region_label.setVisible(idx == 2)
+        if idx == 1:
+            self._pick_window()
+        elif idx == 2:
+            self._pick_region()
 
     def _pick_window(self) -> None:
         dlg = WindowPickerDialog(exclude_hwnd=int(self.winId()))
@@ -388,6 +415,10 @@ class MainWindow(QMainWindow):
         self.titlebar.pin_btn.setChecked(checked)
 
     def _toggle_pause(self) -> None:
+        if self.pause_btn.text() == "开始识别":
+            if self._on_start is not None:
+                self._on_start()
+            return
         if self._on_toggle_pause is None:
             return
         paused = self.pause_btn.text() == "暂停识别"
@@ -398,13 +429,17 @@ class MainWindow(QMainWindow):
         page = QWidget()
         vbox = QVBoxLayout(page)
         tools = QHBoxLayout()
-        tools.addStretch()
+        self.stream_search = QLineEdit()
+        self.stream_search.setPlaceholderText("搜索单词或翻译…")
+        self.stream_search.setClearButtonEnabled(True)
+        self.stream_search.textChanged.connect(self._filter_stream)
+        tools.addWidget(self.stream_search, 1)
         clear_btn = QPushButton("清空列表")
         clear_btn.clicked.connect(self._clear_list)
         master_btn = QPushButton("全部掌握")
         master_btn.clicked.connect(lambda: self._mark_all_mastered(include_vocab=True))
         master_nv_btn = QPushButton("全部掌握（不含生词）")
-        master_nv_btn.setToolTip("只把不在生词本中的词加入已掌握，生词保留在列表")
+        master_nv_btn.setToolTip("只把不在生词本中的单词加入已掌握，生词保留在列表")
         master_nv_btn.clicked.connect(lambda: self._mark_all_mastered(include_vocab=False))
         for b in (clear_btn, master_btn, master_nv_btn):
             b.setCursor(Qt.PointingHandCursor)
@@ -422,7 +457,15 @@ class MainWindow(QMainWindow):
         page = QWidget()
         vbox = QVBoxLayout(page)
         tools = QHBoxLayout()
-        tools.addStretch()
+        search = QLineEdit()
+        search.setPlaceholderText("搜索单词或翻译…")
+        search.setClearButtonEnabled(True)
+        search.textChanged.connect(lambda _t, s=status: self._render_vocab(s))
+        if status == "mastered":
+            self.search_m = search
+        else:
+            self.search_v = search
+        tools.addWidget(search, 1)
         clear_btn = QPushButton("清空本页")
         clear_btn.clicked.connect(lambda: self._clear_vocab_page(status))
         tools.addWidget(clear_btn)
@@ -551,17 +594,36 @@ class MainWindow(QMainWindow):
 
     # ---- 词库 ----
     def _refresh_vocab(self, status: str) -> None:
-        """懒加载渲染：只渲染第一批，滚动接近底部时续载。词库按字母序。"""
-        lw = self.list_m if status == "mastered" else self.list_v
+        """从库重读全量词表（按字母序），再按搜索词过滤渲染。"""
         self._vocab_pages[status] = sorted(self.store.words_of(status), key=lambda wt: wt[0])
+        self._vocab_dirty.discard(status)
+        self._render_vocab(status)
+
+    def _word_matches(self, word: str, kw: str) -> bool:
+        if kw in word:
+            return True
+        tr = self._trans_cache.get(word)
+        if tr is None:
+            entry = self.dict.lookup(word)
+            tr = (entry.translation if entry else "").lower()
+            self._trans_cache[word] = tr
+        return kw in tr
+
+    def _render_vocab(self, status: str) -> None:
+        """按本页搜索框过滤后懒加载渲染首屏（同行数等高规则不变）。"""
+        lw = self.list_m if status == "mastered" else self.list_v
+        kw = (self.search_m if status == "mastered" else self.search_v).text().strip().lower()
+        words = self._vocab_pages.get(status, [])
+        if kw:
+            words = [(w, t) for w, t in words if self._word_matches(w, kw)]
+        self._vocab_filtered[status] = words
         lw.setUpdatesEnabled(False)
         lw.clear()
         lw.setUpdatesEnabled(True)
-        self._vocab_dirty.discard(status)
         self._vocab_fill_batch(lw, status, 0, VOCAB_PAGE)
 
     def _vocab_fill_batch(self, lw: QListWidget, status: str, start: int, count: int) -> None:
-        words = self._vocab_pages.get(status, [])
+        words = self._vocab_filtered.get(status, [])
         end = min(start + count, len(words))
         if start >= end:
             return
@@ -587,10 +649,24 @@ class MainWindow(QMainWindow):
         sb = lw.verticalScrollBar()
         if sb.maximum() <= 0 or sb.value() < sb.maximum() - 60:
             return
-        total = len(self._vocab_pages.get(status, []))
+        total = len(self._vocab_filtered.get(status, []))
         if lw.count() >= total:
             return
         self._vocab_fill_batch(lw, status, lw.count(), VOCAB_PAGE)
+
+    def _filter_stream(self) -> None:
+        """识别页实时过滤：按单词本体或翻译匹配。"""
+        kw = self.stream_search.text().strip().lower()
+        for i in range(self.list.count()):
+            row = self.list.itemWidget(self.list.item(i))
+            if not isinstance(row, WordRow):
+                continue
+            hit = (
+                not kw
+                or kw in row.word_label.text().lower()
+                or kw in row.trans_label.text().lower()
+            )
+            self.list.item(i).setHidden(not hit)
 
     def _vocab_row_take(self, lw: QListWidget, word: str) -> None:
         for i in range(lw.count()):
