@@ -131,17 +131,31 @@ class QuickAddDialog(QDialog):
         self.listw.clear()
         self._entries = []
         kw = kw.strip().lower()
+        seen: set[str] = set()
+
+        # 1) 识别区匹配（优先展示，可带生词标记）
         for i in range(self._win.list.count()):
             row = self._win.list.itemWidget(self._win.list.item(i))
             if not isinstance(row, WordRow):
                 continue
             word = row.word_label.text()
             trans = row.trans_label.text()
-            if kw and kw not in word.lower() and kw not in trans.lower():
+            if kw and kw.lower() not in word.lower() and kw not in trans.lower():
                 continue
-            tag = " [生]" if row.in_vocab else ""
+            tag = " · 生" if row.in_vocab else ""
+            seen.add(row.canonical)
             self._entries.append(row.canonical)
             self.listw.addItem(QListWidgetItem(f"{word}{tag}    {trans[:60]}"))
+
+        # 2) 全词典前缀检索（含识别区中未出现的词）
+        if kw and self._win.dict is not None:
+            for word, trans in self._win.dict.search_prefix(kw):
+                if word in seen:
+                    continue
+                seen.add(word)
+                self._entries.append(word)
+                self.listw.addItem(QListWidgetItem(f"{word}    {trans[:60]}"))
+
         if self.listw.count():
             self.listw.setCurrentRow(0)
         if self.isVisible():

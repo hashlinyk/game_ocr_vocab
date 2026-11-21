@@ -58,6 +58,19 @@ class Dictionary:
                 return lemma
         return word
 
+    def search_prefix(self, prefix: str, limit: int = 15) -> list[tuple[str, str]]:
+        """按前缀检索全词典（常用词优先），返回 [(word, 第一行翻译)]。"""
+        cur = self.conn.execute(
+            "SELECT word, translation, frq FROM dict WHERE word LIKE ? "
+            "ORDER BY frq DESC LIMIT ?",
+            (prefix.replace("%", "").replace("_", "") + "%", limit),
+        )
+        out = []
+        for word, translation, _frq in cur.fetchall():
+            lines = [ln.strip() for ln in (translation or "").replace("\\n", "\n").split("\n") if ln.strip()]
+            out.append((word, lines[0] if lines else ""))
+        return out
+
     def lookup(self, word: str) -> WordEntry | None:
         canonical = self.to_canonical(word)
         for candidate in (canonical, word):
