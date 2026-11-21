@@ -12,6 +12,7 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
+    QSizeGrip,
     QVBoxLayout,
     QWidget,
 )
@@ -119,7 +120,9 @@ class MiniWindow(QWidget):
         self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.Tool)
         self.setAttribute(Qt.WA_TranslucentBackground)
         self.setStyleSheet(CARD_QSS)
-        self.setFixedSize(MINI_W, MINI_H)
+        self.setMinimumSize(240, 240)
+        self.resize(MINI_W, MINI_H)
+        QSizeGrip(self)  # 右下角拖拽调整大小
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 10, 10, 10)
@@ -239,12 +242,18 @@ class MiniWindow(QWidget):
         anim.start(QPropertyAnimation.DeleteWhenStopped)
 
     def show_at(self) -> None:
-        screen = QGuiApplication.primaryScreen().geometry()
-        self.move(screen.right() - MINI_W - 40, screen.top() + (screen.height() - MINI_H) // 2)
+        from .window_geometry import restore_geometry
+
+        if not restore_geometry("mini", self):
+            screen = QGuiApplication.primaryScreen().geometry()
+            self.move(screen.right() - MINI_W - 40, screen.top() + (screen.height() - MINI_H) // 2)
         self.show()
         self.raise_()
 
     def _to_full(self) -> None:
+        from .window_geometry import save_geometry
+
+        save_geometry("mini", self)  # 记住 mini 模式的位置/大小
         self.hide()
         self._win.show()
         self._win.raise_()

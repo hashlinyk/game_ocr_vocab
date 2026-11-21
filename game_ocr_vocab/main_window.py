@@ -375,6 +375,9 @@ class MainWindow(QMainWindow):
         self.setWindowFlag(Qt.FramelessWindowHint)
         screen_w = self.screen().availableGeometry().width()
         self.resize(int(screen_w * 0.7), 640)
+        from .window_geometry import restore_geometry
+
+        restore_geometry("main", self)  # 恢复上次关闭时的位置/大小
 
         central = QWidget()
         vbox = QVBoxLayout(central)
@@ -440,13 +443,24 @@ class MainWindow(QMainWindow):
 
     def _enter_mini(self) -> None:
         from .mini_window import MiniWindow
+        from .window_geometry import save_geometry
 
         if self._mini is None:
             self._mini = MiniWindow(self)
+        save_geometry("main", self)  # 记住完整模式的位置/大小
         self._mini.set_state(self._state)
         self._mini.refresh()
         self.hide()
         self._mini.show_at()
+
+    def closeEvent(self, event) -> None:
+        from .window_geometry import save_geometry
+
+        if self.isVisible():
+            save_geometry("main", self)
+        if self._mini is not None and self._mini.isVisible():
+            save_geometry("mini", self._mini)
+        super().closeEvent(event)
 
     def _notify_mini(self) -> None:
         if self._mini is not None and self._mini.isVisible():
