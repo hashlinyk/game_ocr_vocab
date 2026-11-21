@@ -57,7 +57,7 @@ def main() -> int:
     def on_region_selected(output_idx: int, region: tuple) -> None:
         """框选完成：仅登记目标，等待点击『开始识别』。"""
         pending["kind"] = "region"
-        pending["arg"] = (output_idx, region)
+        pending["arg"] = (region, output_idx)  # 与 set_region(region, output_idx) 参数顺序一致
         win.set_region_text(region)
         win.set_run_state("idle")
         win.set_start_ready(True)
