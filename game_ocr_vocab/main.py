@@ -29,7 +29,7 @@ def main() -> int:
     from .main_window import THEME_QSS
 
     app = QApplication(sys.argv)
-    app.setFont(QFont("Microsoft YaHei UI", 12))
+    app.setFont(QFont("Microsoft YaHei UI", 10))
     app.setStyleSheet(THEME_QSS)
 
     err = check_prereqs()

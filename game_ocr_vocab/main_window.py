@@ -27,70 +27,72 @@ WORD_TRANS_SPACING = 10  # 单词行与释义行间距
 VOCAB_PAGE = 10          # 词库懒加载每批行数
 
 RUN_STATES = {
-    "idle": ("未开始识别", "#6b7280", "#eef0f4"),
-    "running": ("持续识别中", "#177245", "#e3f6ec"),
-    "paused": ("已暂停", "#9a6200", "#fdf1dc"),
+    "idle": ("未开始识别", "#b0b4bd"),
+    "running": ("持续识别中", "#22c55e"),
+    "paused": ("已暂停", "#f59e0b"),
 }
 
 THEME_QSS = """
-QMainWindow, QDialog { background: #f3f5f9; }
-QLabel { color: #2b2d33; }
+QMainWindow, QDialog { background: #fafbfc; }
+QLabel { color: #17181c; }
 
 QPushButton {
-    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
-    padding: 5px 12px; color: #3a3f4b;
+    background: #ffffff; border: 1px solid #e3e5e8; border-radius: 8px;
+    padding: 4px 12px; color: #31343c; font-size: 12px; min-height: 20px;
 }
-QPushButton:hover { background: #f0f4ff; border-color: #b8c6ff; }
-QPushButton:pressed { background: #e4ebff; }
-QPushButton:disabled { color: #b0b4be; background: #f5f6f8; border-color: #e8eaef; }
-QPushButton#primaryBtn { background: #4f6ef7; color: #ffffff; border: none; font-weight: bold; }
-QPushButton#primaryBtn:hover { background: #3f5ce4; }
-QPushButton#primaryBtn:pressed { background: #3450d4; }
-QPushButton#primaryBtn:disabled { background: #bcc8fb; color: #ffffff; }
+QPushButton:hover { background: #f6f7f8; border-color: #d3d6db; }
+QPushButton:pressed { background: #eef0f2; }
+QPushButton:disabled { color: #b8bcc4; background: #fafafa; border-color: #eef0f2; }
+QPushButton#primaryBtn {
+    background: #17181c; color: #ffffff; border: none; font-weight: 600;
+}
+QPushButton#primaryBtn:hover { background: #2a2d35; }
+QPushButton#primaryBtn:pressed { background: #3a3e48; }
+QPushButton#primaryBtn:disabled { background: #d5d8dd; color: #ffffff; }
 
 QLineEdit, QComboBox, QKeySequenceEdit {
-    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
-    padding: 6px 10px; color: #2b2d33; selection-background-color: #cdd9ff;
+    background: #ffffff; border: 1px solid #e3e5e8; border-radius: 8px;
+    padding: 6px 10px; color: #17181c; selection-background-color: #dbe4ff;
 }
-QLineEdit:focus, QComboBox:focus, QKeySequenceEdit:focus { border-color: #4f6ef7; }
+QLineEdit:focus, QComboBox:focus, QKeySequenceEdit:focus { border-color: #9aa0aa; }
 QComboBox::drop-down { border: none; width: 24px; }
 QComboBox QAbstractItemView {
-    background: #ffffff; border: 1px solid #dde2ea; border-radius: 8px;
-    selection-background-color: #eef2ff; selection-color: #2b2d33; outline: none;
+    background: #ffffff; border: 1px solid #e3e5e8; border-radius: 8px;
+    selection-background-color: #f3f4f6; selection-color: #17181c; outline: none;
 }
 
-QTabWidget::pane { border: none; background: transparent; top: -1px; }
+QTabWidget::pane { border: none; background: transparent; }
 QTabBar::tab {
-    background: transparent; color: #6b7280; padding: 8px 18px;
-    margin-right: 4px; border-radius: 9px;
+    background: transparent; border: none;
+    border-bottom: 2px solid transparent;
+    padding: 7px 14px; color: #8b909a; margin-right: 2px;
 }
 QTabBar::tab:selected {
-    background: #ffffff; color: #1f2430; font-weight: bold;
-    border: 1px solid #e3e8f0;
+    color: #17181c; font-weight: 600; border-bottom: 2px solid #17181c;
 }
-QTabBar::tab:hover:!selected { color: #2b2d33; }
+QTabBar::tab:hover:!selected { color: #31343c; }
 
 QListWidget {
-    background: #ffffff; border: 1px solid #e6eaf2; border-radius: 12px; padding: 4px;
+    background: #ffffff; border: 1px solid #eceef1; border-radius: 12px; padding: 2px;
 }
-QListWidget::item { border-bottom: 1px solid #f2f4f8; }
+QListWidget::item { border-bottom: 1px solid #f4f5f7; }
 QListWidget::item:selected { background: transparent; }
 #wordRow { background: transparent; border-radius: 8px; }
-#wordRow:hover { background: #f7f9ff; }
+#wordRow:hover { background: #f7f8fa; }
 
-QScrollBar:vertical { width: 8px; background: transparent; margin: 2px; }
-QScrollBar::handle:vertical { background: #cfd6e4; border-radius: 4px; min-height: 30px; }
-QScrollBar::handle:vertical:hover { background: #aab5cc; }
+QScrollBar:vertical { width: 6px; background: transparent; margin: 2px; }
+QScrollBar::handle:vertical { background: #d6d9de; border-radius: 3px; min-height: 30px; }
+QScrollBar::handle:vertical:hover { background: #b9bec6; }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0; }
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical { background: transparent; }
 
-QStatusBar { color: #8a92a3; background: transparent; }
+QStatusBar { color: #9aa0aa; background: transparent; }
 QToolTip {
-    background: #2b2d33; color: #ffffff; border: none; padding: 4px 8px; border-radius: 6px;
+    background: #17181c; color: #ffffff; border: none; padding: 4px 8px; border-radius: 6px;
 }
-QMenu { background: #ffffff; border: 1px solid #e3e8f0; border-radius: 8px; padding: 4px; }
+QMenu { background: #ffffff; border: 1px solid #e3e5e8; border-radius: 8px; padding: 4px; }
 QMenu::item { padding: 6px 20px; border-radius: 6px; }
-QMenu::item:selected { background: #eef2ff; }
+QMenu::item:selected { background: #f3f4f6; }
 """
 
 
@@ -268,7 +270,7 @@ class WordRow(_RowBase):
         left.setSpacing(WORD_TRANS_SPACING)
         top = QHBoxLayout()
         self.word_label = QLabel(entry.word)
-        self.word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        self.word_label.setStyleSheet("font-weight: 600; font-size: 16px;")
         top.addWidget(self.word_label)
         if in_vocab:
             tag = QLabel("生")
@@ -281,7 +283,7 @@ class WordRow(_RowBase):
             )
             top.addWidget(tag)
         pho = QLabel(entry.phonetic)
-        pho.setStyleSheet("color: #888888; font-size: 13px;")
+        pho.setStyleSheet("color: #9aa0aa; font-size: 12px;")
         top.addWidget(pho)
         top.addStretch()
         left.addLayout(top)
@@ -295,7 +297,7 @@ class WordRow(_RowBase):
         self.trans_label = QLabel(entry.translation)
         self.trans_label.setWordWrap(True)
         self.trans_label.setToolTip(entry.translation_full)
-        self.trans_label.setStyleSheet("color: #1a1a1a; font-size: 14px;")
+        self.trans_label.setStyleSheet("color: #31343c; font-size: 13px;")
         left.addWidget(self.trans_label)
         layout.addLayout(left, 1)
 
@@ -339,9 +341,9 @@ class VocabRow(_RowBase):
         left.setSpacing(WORD_TRANS_SPACING)
         top = QHBoxLayout()
         self.word_label = QLabel(entry.word)
-        self.word_label.setStyleSheet("font-weight: bold; font-size: 18px;")
+        self.word_label.setStyleSheet("font-weight: 600; font-size: 16px;")
         pho = QLabel(entry.phonetic)
-        pho.setStyleSheet("color: #888888; font-size: 13px;")
+        pho.setStyleSheet("color: #9aa0aa; font-size: 12px;")
         top.addWidget(self.word_label)
         top.addWidget(pho)
         speak_btn = QPushButton(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaVolume), "")
@@ -355,7 +357,7 @@ class VocabRow(_RowBase):
         self.trans_label = QLabel(entry.translation)
         self.trans_label.setWordWrap(True)
         self.trans_label.setToolTip(entry.translation_full)
-        self.trans_label.setStyleSheet("color: #555555; font-size: 14px;")
+        self.trans_label.setStyleSheet("color: #5f6470; font-size: 13px;")
         left.addWidget(self.trans_label)
         layout.addLayout(left, 1)
 
@@ -465,7 +467,9 @@ class MainWindow(QMainWindow):
         self.capture_combo.addItem("选择窗口")
         self.capture_combo.addItem("框选识别区域")
         self.capture_combo.activated.connect(self._on_capture_mode)
+        self.state_dot = QLabel("●")
         self.state_label = QLabel("未开始识别")
+        self.state_label.setStyleSheet("color: #5f6470; font-weight: 500;")
         self.pause_btn = QPushButton("开始识别")
         self.pause_btn.setObjectName("primaryBtn")
         self.pause_btn.setEnabled(False)
@@ -475,12 +479,10 @@ class MainWindow(QMainWindow):
         self.region_label.setStyleSheet("color: gray;")
         self.region_label.setVisible(False)  # 仅选中「框选识别区域」时显示
         self.count_label = QLabel("")
-        self.count_label.setStyleSheet(
-            "color: #4f6ef7; background: #eef2ff; border-radius: 10px;"
-            " padding: 3px 10px; font-weight: bold;"
-        )
+        self.count_label.setStyleSheet("color: #8b909a;")
         self._update_counts()
         top.addWidget(self.capture_combo)
+        top.addWidget(self.state_dot)
         top.addWidget(self.state_label)
         top.addWidget(self.pause_btn)
         top.addWidget(self.region_label, 1)
@@ -500,12 +502,9 @@ class MainWindow(QMainWindow):
 
     def set_run_state(self, state: str) -> None:
         self._state = state
-        text, fg, bg = RUN_STATES.get(state, RUN_STATES["idle"])
+        text, dot_color = RUN_STATES.get(state, RUN_STATES["idle"])
         self.state_label.setText(text)
-        self.state_label.setStyleSheet(
-            f"color: {fg}; background: {bg}; border-radius: 10px;"
-            " padding: 3px 10px; font-weight: bold;"
-        )
+        self.state_dot.setStyleSheet(f"color: {dot_color}; font-size: 9px;")
         if self._mini is not None and self._mini.isVisible():
             self._mini.set_state(state)
         if state == "idle":
@@ -912,7 +911,7 @@ class MainWindow(QMainWindow):
 
     def _update_counts(self) -> None:
         m, v = self.store.counts()
-        self.count_label.setText(f"已掌握 {m} | 生词本 {v}")
+        self.count_label.setText(f"已掌握 {m} · 生词本 {v}")
 
     def set_region_text(self, region: tuple) -> None:
         l, t, r, b = region
