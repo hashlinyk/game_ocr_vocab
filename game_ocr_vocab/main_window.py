@@ -191,7 +191,7 @@ class WordRow(_RowBase):
         btn_lay.setSpacing(6)
         # 第一按钮：掌握；第二按钮：普通词「生词本」/ 生词「隐藏」（仅本次隐藏）；宽度统一防布局跳动
         master_btn = QPushButton("掌握")
-        master_btn.setFixedWidth(72)
+        master_btn.setFixedWidth(88)
         master_btn.setToolTip("加入已掌握，之后不再出现")
         master_btn.setCursor(Qt.PointingHandCursor)
         master_btn.clicked.connect(lambda _=False, c=entry.canonical: on_mastered(c))
@@ -201,7 +201,7 @@ class WordRow(_RowBase):
         else:
             second = ("生词本", on_vocab, "加入生词本")
         second_btn = QPushButton(second[0])
-        second_btn.setFixedWidth(72)
+        second_btn.setFixedWidth(88)
         second_btn.setToolTip(second[2])
         second_btn.setCursor(Qt.PointingHandCursor)
         second_btn.clicked.connect(lambda _=False, c=entry.canonical, f=second[1]: f(c))
@@ -503,6 +503,7 @@ class MainWindow(QMainWindow):
                 # 生词本中的词每次画面出现都要重新提示（带「生」标记），清除已展示记录
                 self.store.reset_shown_word(canonical)
             self.remove_word(canonical)
+            self._vocab_dirty = {"mastered", "vocab"}  # 词库页数据已变化
             self._update_counts()
         return handler
 
@@ -602,8 +603,11 @@ class MainWindow(QMainWindow):
         status = self.store.status_of(word)
         target = "vocab" if status == "mastered" else "mastered"
         self.store.set_status(word, target)
+        if target == "vocab":
+            self.store.reset_shown_word(word)   # 移入生词本：下次画面出现重新提示
         lw = self.list_m if status == "mastered" else self.list_v
         self._vocab_row_take(lw, word)          # 仅移除当前行，另一 tab 标脏延迟刷新
+        self.remove_word(word)                  # 识别页同步移除
         pages = self._vocab_pages.get(status)
         if pages is not None:
             self._vocab_pages[status] = [(w, t) for w, t in pages if w != word]
@@ -612,8 +616,10 @@ class MainWindow(QMainWindow):
 
     def _remove_word(self, word: str) -> None:
         self.store.remove_status(word)
+        self.store.reset_shown_word(word)       # 离开词库：下次画面出现重新提示
         self._vocab_row_take(self.list_m, word)
         self._vocab_row_take(self.list_v, word)
+        self.remove_word(word)                  # 识别页同步移除
         for status in ("mastered", "vocab"):
             pages = self._vocab_pages.get(status)
             if pages is not None:
@@ -631,7 +637,10 @@ class MainWindow(QMainWindow):
             return
         for word, _ts in self.store.words_of(status):
             self.store.remove_status(word)
+            self.store.reset_shown_word(word)
+            self.remove_word(word)              # 识别页同步移除对应行
         self._refresh_vocab(status)
+        self._vocab_dirty = {"mastered", "vocab"}
         self._update_counts()
 
     # ---- 通用 ----
