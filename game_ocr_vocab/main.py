@@ -113,16 +113,22 @@ def main() -> int:
     )
     capture_worker.windowStopped.connect(on_window_stopped)
 
-    # 全局热键 Ctrl+Alt+Shift+F：主屏居中快速查词弹窗
+    # 全局热键（无论焦点在哪）：
+    #   Ctrl+Alt+Shift+F 快速查词弹窗
+    #   Ctrl+Alt+Shift+C 全部掌握
+    #   Ctrl+Alt+Shift+X 全部掌握（不含生词）
     from .hotkey import install_hotkey, uninstall_hotkey, MOD_ALT, MOD_CONTROL, MOD_SHIFT
     from .quick_add import QuickAddDialog
 
     quick_add = QuickAddDialog(win)
-    HOTKEY_ID = 0x9A31
-    if not install_hotkey(
-        app, HOTKEY_ID, MOD_ALT | MOD_CONTROL | MOD_SHIFT, ord("F"), quick_add.popup
-    ):
-        win.show_error("全局热键 Ctrl+Alt+Shift+F 注册失败（可能已被其他程序占用）")
+    HOTKEYS = (
+        (0x9A31, ord("F"), "快速查词", quick_add.popup),
+        (0x9A32, ord("C"), "全部掌握", lambda: win._mark_all_mastered(include_vocab=True)),
+        (0x9A33, ord("X"), "全部掌握（不含生词）", lambda: win._mark_all_mastered(include_vocab=False)),
+    )
+    for hk_id, vk, label, cb in HOTKEYS:
+        if not install_hotkey(app, hk_id, MOD_ALT | MOD_CONTROL | MOD_SHIFT, vk, cb):
+            win.show_error(f"全局热键 Ctrl+Alt+Shift+{chr(vk)}（{label}）注册失败（可能已被其他程序占用）")
 
     ocr_worker.wordsFound.connect(win.add_entries)
     ocr_worker.ocrError.connect(win.show_error)
@@ -150,7 +156,8 @@ def main() -> int:
     tts.stop()
     store.close()
     main_dict.close()
-    uninstall_hotkey(HOTKEY_ID)
+    for hk_id, _vk, _label, _cb in HOTKEYS:
+        uninstall_hotkey(hk_id)
     return ret
 
 
