@@ -556,6 +556,15 @@ class MainWindow(QMainWindow):
         self.store.reset_shown_word(canonical)
         self.remove_word(canonical)
 
+    def add_to_vocab(self, canonical: str) -> None:
+        """外部（快速查词弹窗）调用：加入生词本并联动列表/计数。"""
+        self.store.set_status(canonical, "vocab")
+        self.store.reset_shown_word(canonical)
+        self.remove_word(canonical)
+        self._vocab_dirty = {"mastered", "vocab"}
+        self._update_counts()
+        self.statusBar().showMessage(f"已加入生词本：{canonical}", 3000)
+
     def remove_word(self, canonical: str) -> None:
         for i in range(self.list.count()):
             row = self.list.itemWidget(self.list.item(i))
