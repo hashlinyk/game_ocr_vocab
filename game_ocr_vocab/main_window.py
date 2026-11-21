@@ -524,6 +524,7 @@ class MainWindow(QMainWindow):
 
     def _mark_all_mastered(self, include_vocab: bool = True) -> None:
         n = 0
+        moved_vocab = 0
         removed_rows = []
         for i in range(self.list.count()):
             row = self.list.itemWidget(self.list.item(i))
@@ -531,15 +532,20 @@ class MainWindow(QMainWindow):
                 continue
             if not include_vocab and row.in_vocab:
                 continue  # 生词保留在列表
+            if row.in_vocab:
+                moved_vocab += 1  # 生词本中的词移入已掌握
             self.store.set_status(row.canonical, "mastered")
             removed_rows.append(i)
             n += 1
         for i in reversed(removed_rows):
             self.list.takeItem(i)
+        self._vocab_dirty = {"mastered", "vocab"}  # 词库页数据已变化
         self._update_counts()
         msg = f"已将 {n} 个词加入已掌握"
         if not include_vocab:
             msg += "（生词已保留）"
+        elif moved_vocab:
+            msg += f"（含 {moved_vocab} 个生词本词汇移入）"
         self.statusBar().showMessage(msg, 5000)
 
     # ---- 词库 ----
