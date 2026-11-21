@@ -52,14 +52,21 @@ jobs:
           if (-not (Test-Path "$dir\_internal\data\tts\en_US-amy-medium.onnx")) { Write-Error "piper voice model missing"; exit 1 }
           Write-Output "smoke test OK"
 
+      - name: Read version
+        id: ver
+        shell: pwsh
+        run: |
+          $v = python -c "from game_ocr_vocab import __version__; print(__version__)"
+          Write-Output "version=$v" >> $env:GITHUB_OUTPUT
+
       - name: Zip portable folder
         shell: pwsh
-        run: Compress-Archive -Path ".\dist\game_ocr_vocab\*" -DestinationPath ".\dist\game_ocr_vocab_win64.zip"
+        run: Compress-Archive -Path ".\dist\game_ocr_vocab\*" -DestinationPath ".\dist\game_ocr_vocab_win64_v${{ steps.ver.outputs.version }}.zip"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: game_ocr_vocab_win64
-          path: dist/game_ocr_vocab_win64.zip
+          name: game_ocr_vocab_win64_v${{ steps.ver.outputs.version }}
+          path: dist/game_ocr_vocab_win64_v${{ steps.ver.outputs.version }}.zip
           retention-days: 14
 
       - name: Release latest build
@@ -68,13 +75,18 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          $zip = "dist/game_ocr_vocab_win64_v$ver.zip"
           gh release delete latest --yes --cleanup-tag 2>$null
-          $notes = "自动构建于 commit $env:GITHUB_SHA`n解压后双击「游戏单词助手.exe」即可使用（Windows 10/11 x64，全离线）。"
-          gh release create latest dist/game_ocr_vocab_win64.zip --title "最新构建 (latest)" --notes $notes --latest
+          $notes = "版本 v$ver（自动构建于 commit $env:GITHUB_SHA）`n解压后双击「游戏单词助手.exe」即可使用（Windows 10/11 x64，全离线）。"
+          gh release create latest $zip --title "最新构建 v$ver (latest)" --notes $notes --latest
 
       - name: Release versioned build
         if: startsWith(github.ref, 'refs/tags/v')
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create $env:GITHUB_REF_NAME dist/game_ocr_vocab_win64.zip --title $env:GITHUB_REF_NAME --notes "自动构建 $env:GITHUB_REF_NAME" --latest
+        run: |
+          $ver = "${{ steps.ver.outputs.version }}"
+          $zip = "dist/game_ocr_vocab_win64_v$ver.zip"
+          gh release create $env:GITHUB_REF_NAME $zip --title "v$ver" --notes "正式版本 v$ver（tag: $env:GITHUB_REF_NAME）`n解压后双击「游戏单词助手.exe」即可使用（Windows 10/11 x64，全离线）。" --latest

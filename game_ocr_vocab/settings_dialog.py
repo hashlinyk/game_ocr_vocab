@@ -70,12 +70,36 @@ class SettingsDialog(QDialog):
         self.menu = QListWidget()
         self.menu.setFixedWidth(150)
         self.menu.addItem("快捷键")
+        self.menu.addItem("关于")
         self.menu.currentRowChanged.connect(lambda i: self.stack.setCurrentIndex(i))
         layout.addWidget(self.menu)
 
         self.stack = QStackedWidget()
         self.stack.addWidget(self._build_hotkey_page())
+        self.stack.addWidget(self._build_about_page())
         layout.addWidget(self.stack, 1)
+
+    def _build_about_page(self) -> QWidget:
+        from . import __version__
+
+        page = QWidget()
+        vbox = QVBoxLayout(page)
+        title = QLabel("游戏单词助手")
+        title.setStyleSheet("font-size: 18px; font-weight: bold;")
+        ver = QLabel(f"版本 {__version__}")
+        ver.setStyleSheet("color: #666;")
+        desc = QLabel(
+            "游戏画面离线英文单词识别与翻译\n"
+            "OCR：RapidOCR ｜ 词典：ECDICT ｜ 发音：Piper 神经语音\n"
+            "识别方式：窗口捕获（WGC）/ 框选区域"
+        )
+        desc.setStyleSheet("color: #888;")
+        vbox.addWidget(title)
+        vbox.addWidget(ver)
+        vbox.addSpacing(8)
+        vbox.addWidget(desc)
+        vbox.addStretch()
+        return page
 
     def _build_hotkey_page(self) -> QWidget:
         page = QWidget()

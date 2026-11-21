@@ -41,7 +41,24 @@ GitHub 直连慢时给 prepare_dict 加镜像：`python scripts/prepare_dict.py 
 ## 免安装分发（CI 自动构建）
 
 推送到 `main` 后 GitHub Actions 自动构建 Windows 免安装版：
-仓库 **Actions → 最新 run → Artifacts** 下载 `game_ocr_vocab_win64.zip`，解压双击 `游戏单词助手.exe` 即用（Windows 10/11 x64，全离线）。
+仓库 **Actions → 最新 run → Artifacts** 下载 `game_ocr_vocab_win64_v<版本>.zip`，
+或在 **Releases** 页下载（`latest` = 最新构建），解压双击 `游戏单词助手.exe` 即用（Windows 10/11 x64，全离线）。
+
+## 版本管理
+
+版本号唯一来源：`game_ocr_vocab/__init__.py` 的 `__version__`（设置窗口「关于」页可见）。
+
+发正式版流程：
+
+```bash
+# 1. 修改 __version__ = "x.y.z"
+# 2. 提交并打 tag
+git commit -am "release vx.y.z"
+git tag vx.y.z
+git push && git push --tags
+```
+
+push tag（`v*`）会自动构建并创建对应版本号的 Release；push `main` 则滚动更新 `latest` Release。
 
 本地打包：`pyinstaller game_ocr_vocab.spec --noconfirm`，产物在 `dist/game_ocr_vocab/`。
 打包版词典/OCR 模型内置于程序中；用户词库（`vocab.db`）生成在 exe 同级 `data/` 目录。
