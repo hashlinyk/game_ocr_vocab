@@ -49,6 +49,7 @@ GitHub 直连慢时给 prepare_dict 加镜像：`python scripts/prepare_dict.py 
 ## 版本管理
 
 版本号唯一来源：`game_ocr_vocab/__init__.py` 的 `__version__`（设置窗口「关于」页可见）。
+版本策略（语义化）：新功能 → minor+1；仅修复 → patch+1；0.x 阶段接口未冻结。
 
 发正式版流程：
 
