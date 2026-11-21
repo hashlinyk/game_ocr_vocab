@@ -373,18 +373,6 @@ class MainWindow(QMainWindow):
         self.pause_btn.setText("继续识别" if state == "paused" else "暂停识别")
         self.pause_btn.setEnabled(state != "idle")
 
-    def _cleanup_debug_frames(self) -> None:
-        from . import config
-
-        if not config.DEBUG_SAVE_FRAMES:
-            return
-        frames = sorted(config.DEBUG_DIR.glob("t*.png"))
-        for old in frames[: max(0, len(frames) - config.DEBUG_KEEP)]:
-            try:
-                old.unlink()
-            except OSError:
-                pass
-
     def _pick_window(self) -> None:
         dlg = WindowPickerDialog(exclude_hwnd=int(self.winId()))
         dlg.windowPicked.connect(self._on_window_picked)
