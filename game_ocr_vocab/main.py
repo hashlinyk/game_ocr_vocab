@@ -54,11 +54,17 @@ def main() -> int:
 
     def on_region_selected(region: tuple) -> None:
         ocr_worker.reset_snap()
+        capture_worker.set_paused(False)
         capture_worker.set_region(region)
         win.set_region_text(region)
+        win.set_run_state("running")
+
+    def on_toggle_pause(paused: bool) -> None:
+        capture_worker.set_paused(paused)
+        win.set_run_state("paused" if paused else "running")
 
     main_dict = Dictionary()
-    win = MainWindow(store, tts, on_region_selected, dict_ref=main_dict)
+    win = MainWindow(store, tts, on_region_selected, dict_ref=main_dict, on_toggle_pause=on_toggle_pause)
 
     ocr_worker.wordsFound.connect(win.add_entries)
     ocr_worker.ocrError.connect(win.show_error)

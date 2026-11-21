@@ -1,6 +1,7 @@
 """主窗口：三标签页（识别词流 / 已掌握 / 生词本）+ 区域控制 + 状态提示。"""
 
-from PySide6.QtCore import QSize, Qt, QTimer
+from PySide6.QtCore import QRect, QSize, Qt, QTimer
+from PySide6.QtGui import QColor, QPainter, QPen, QPixmap
 from PySide6.QtWidgets import (
     QHBoxLayout,
     QLabel,
@@ -9,6 +10,7 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
+    QSizeGrip,
     QStyle,
     QTabWidget,
     QVBoxLayout,
@@ -19,6 +21,109 @@ from .dictionary import Dictionary, WordEntry
 
 WORD_TRANS_SPACING = 10  # 单词行与释义行间距
 VOCAB_PAGE = 10          # 词库懒加载每批行数
+
+RUN_STATES = {
+    "idle": ("未开始识别", "#999999"),
+    "running": ("持续识别中", "#2e8b57"),
+    "paused": ("已暂停", "#e67e22"),
+}
+
+
+def _flat_btn(style: QStyle, icon: QStyle.StandardPixmap, tooltip: str, close=False) -> QPushButton:
+    b = QPushButton()
+    b.setIcon(style.standardIcon(icon))
+    b.setToolTip(tooltip)
+    b.setCursor(Qt.PointingHandCursor)
+    b.setFixedSize(38, 30)
+    hover = "background: #e81123; color: white;" if close else "background: rgba(0,0,0,14);"
+    b.setStyleSheet(
+        f"QPushButton {{ border: none; background: transparent; border-radius: 4px; }}"
+        f"QPushButton:hover {{ {hover} }}"
+    )
+    return b
+
+
+class TitleBar(QWidget):
+    """自绘标题栏：置顶图钉按钮在系统按钮（最小化/最大化/关闭）左侧，支持拖拽移动窗口。"""
+
+    def __init__(self, win: "MainWindow"):
+        super().__init__()
+        self._win = win
+        self._drag_offset: QPoint | None = None
+        self.setFixedHeight(36)
+
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(12, 0, 2, 0)
+        lay.setSpacing(2)
+        title = QLabel("游戏单词助手")
+        title.setStyleSheet("font-size: 13px; color: #555;")
+        lay.addWidget(title)
+        lay.addStretch()
+
+        self.pin_btn = QPushButton()
+        self.pin_btn.setCheckable(True)
+        self.pin_btn.setFixedSize(38, 30)
+        self.pin_btn.setToolTip("窗口置顶")
+        self.pin_btn.setCursor(Qt.PointingHandCursor)
+        self.pin_btn.setIcon(self._pin_icon(False))
+        self.pin_btn.setStyleSheet(
+            "QPushButton { border: none; background: transparent; border-radius: 4px; }"
+            "QPushButton:hover { background: rgba(0,0,0,14); }"
+            "QPushButton:checked { background: rgba(26,115,232,40); }"
+        )
+        self.pin_btn.toggled.connect(self._toggle_pin)
+        lay.addWidget(self.pin_btn)
+
+        style = win.style()
+        min_btn = _flat_btn(style, QStyle.StandardPixmap.SP_TitleBarMinButton, "最小化")
+        min_btn.clicked.connect(win.showMinimized)
+        lay.addWidget(min_btn)
+        self.max_btn = _flat_btn(style, QStyle.StandardPixmap.SP_TitleBarMaxButton, "最大化")
+        self.max_btn.clicked.connect(self._toggle_max)
+        lay.addWidget(self.max_btn)
+        close_btn = _flat_btn(style, QStyle.StandardPixmap.SP_TitleBarCloseButton, "关闭", close=True)
+        close_btn.clicked.connect(win.close)
+        lay.addWidget(close_btn)
+
+    def _pin_icon(self, active: bool) -> QPixmap:
+        pm = QPixmap(32, 32)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        p.setRenderHint(QPainter.Antialiasing)
+        c = QColor("#1a73e8") if active else QColor("#9a9a9a")
+        p.setPen(Qt.NoPen)
+        p.setBrush(c)
+        p.drawEllipse(QRect(10, 3, 12, 12))       # 钉头
+        p.setPen(QPen(c, 2.5))
+        p.drawLine(16, 15, 16, 24)                # 针杆
+        p.drawLine(11, 27, 21, 27)                # 针脚
+        p.end()
+        return QPixmap(pm)
+
+    def _toggle_pin(self, checked: bool) -> None:
+        self.pin_btn.setIcon(self._pin_icon(checked))
+        self._win.setWindowFlag(Qt.WindowStaysOnTopHint, checked)
+        self._win.show()
+
+    def _toggle_max(self) -> None:
+        if self._win.isMaximized():
+            self._win.showNormal()
+        else:
+            self._win.showMaximized()
+
+    def mousePressEvent(self, event) -> None:
+        if event.button() == Qt.LeftButton:
+            self._drag_offset = event.globalPosition().toPoint() - self._win.frameGeometry().topLeft()
+
+    def mouseMoveEvent(self, event) -> None:
+        if self._drag_offset is not None and event.buttons() & Qt.LeftButton:
+            self._win.move(event.globalPosition().toPoint() - self._drag_offset)
+
+    def mouseReleaseEvent(self, event) -> None:
+        self._drag_offset = None
+
+    def mouseDoubleClickEvent(self, event) -> None:
+        self._toggle_max()
 
 
 class _RowBase(QWidget):
@@ -128,46 +233,72 @@ class VocabRow(_RowBase):
 
 
 class MainWindow(QMainWindow):
-    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary):
+    def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary, on_toggle_pause=None):
         super().__init__()
         self.store = store
         self.tts = tts
         self.dict = dict_ref
         self._on_region_selected = on_region_selected
+        self._on_toggle_pause = on_toggle_pause
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
         self._vocab_pages = {}                     # status -> 全量词表（懒加载分批渲染）
         self.setWindowTitle("游戏单词助手")
+        self.setWindowFlag(Qt.FramelessWindowHint)
         screen_w = self.screen().availableGeometry().width()
         self.resize(int(screen_w * 0.7), 640)
 
         central = QWidget()
         vbox = QVBoxLayout(central)
+        vbox.setContentsMargins(0, 0, 0, 0)
+        vbox.setSpacing(0)
+        vbox.addWidget(TitleBar(self))
+
+        inner = QVBoxLayout()
+        inner.setContentsMargins(10, 8, 10, 8)
+        inner.setSpacing(8)
         top = QHBoxLayout()
         pick_btn = QPushButton("框选区域")
         pick_btn.clicked.connect(self._pick_region)
+        self.state_label = QLabel("未开始识别")
+        self.state_label.setStyleSheet("color: #999999; font-weight: bold;")
+        self.pause_btn = QPushButton("暂停识别")
+        self.pause_btn.setEnabled(False)
+        self.pause_btn.clicked.connect(self._toggle_pause)
         self.region_label = QLabel("未选择区域")
         self.region_label.setStyleSheet("color: gray;")
         self.count_label = QLabel("")
         self._update_counts()
-        self.top_btn = QPushButton("置顶")
-        self.top_btn.setCheckable(True)
-        self.top_btn.setToolTip("勾选后窗口始终显示在其他窗口之上")
-        self.top_btn.toggled.connect(self._toggle_on_top)
         top.addWidget(pick_btn)
+        top.addWidget(self.state_label)
+        top.addWidget(self.pause_btn)
         top.addWidget(self.region_label, 1)
         top.addWidget(self.count_label)
-        top.addWidget(self.top_btn)
-        vbox.addLayout(top)
+        inner.addLayout(top)
+        vbox.addLayout(inner)
+        QSizeGrip(self)  # 无边框窗口右下角拖拽调整大小
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_stream_tab(), "识别")
         self.tabs.addTab(self._build_vocab_tab("mastered"), "已掌握")
         self.tabs.addTab(self._build_vocab_tab("vocab"), "生词本")
         self.tabs.currentChanged.connect(lambda _i: self._on_tab_changed())
-        vbox.addWidget(self.tabs, 1)
+        inner.addWidget(self.tabs, 1)
         self.setCentralWidget(central)
         self.statusBar().showMessage("点击「框选区域」选择要监视的屏幕区域（Esc 取消）")
+
+    def set_run_state(self, state: str) -> None:
+        text, color = RUN_STATES.get(state, RUN_STATES["idle"])
+        self.state_label.setText(text)
+        self.state_label.setStyleSheet(f"color: {color}; font-weight: bold;")
+        self.pause_btn.setText("继续识别" if state == "paused" else "暂停识别")
+        self.pause_btn.setEnabled(state != "idle")
+
+    def _toggle_pause(self) -> None:
+        if self._on_toggle_pause is None:
+            return
+        paused = self.pause_btn.text() == "暂停识别"
+        self._on_toggle_pause(paused)
 
     # ---- 识别 tab ----
     def _build_stream_tab(self) -> QWidget:
@@ -382,10 +513,6 @@ class MainWindow(QMainWindow):
         self._update_counts()
 
     # ---- 通用 ----
-    def _toggle_on_top(self, checked: bool) -> None:
-        self.setWindowFlag(Qt.WindowStaysOnTopHint, checked)
-        self.show()
-
     def _pick_region(self) -> None:
         from .region_picker import RegionPicker
 

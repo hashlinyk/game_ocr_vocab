@@ -58,6 +58,14 @@ class CaptureWorker(QObject):
         self._force_next = False
         self._pending = False
         self._frame_no = 0
+        self._paused = False
+
+    def set_paused(self, paused: bool) -> None:
+        """暂停/恢复识别：区域保持不变，暂停期间不抓帧不触发 OCR。"""
+        self._paused = paused
+        if not paused:
+            self._prev = None
+            self._force_next = True  # 恢复后首帧直接识别，避免漏掉暂停期间的内容
 
     def set_region(self, region: tuple[int, int, int, int] | None) -> None:
         with self._region_lock:
@@ -112,7 +120,7 @@ class CaptureWorker(QObject):
                     continue
             with self._region_lock:
                 region = self._region
-            if region is None:
+            if region is None or self._paused:
                 time.sleep(0.2)
                 continue
             try:
