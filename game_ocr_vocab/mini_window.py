@@ -124,6 +124,8 @@ class MiniWindow(QWidget):
         self.setMinimumSize(240, 240)
         self.resize(MINI_W, MINI_H)
         self._resize_handle = ResizeHandle(self)  # 无边框窗口自绘调整手柄
+        self._drag_size = None
+        self._apply_screen_limits()
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 10, 10, 10)
@@ -183,10 +185,22 @@ class MiniWindow(QWidget):
         super().resizeEvent(event)
         self._resize_handle.reposition()
 
+    def _apply_screen_limits(self) -> None:
+        """最大高度不超过所在屏幕可用高度的 90%。"""
+        screen = QGuiApplication.screenAt(self.frameGeometry().center())
+        if screen is None:
+            screen = QGuiApplication.primaryScreen()
+        avail = screen.availableGeometry()
+        self.setMaximumHeight(max(int(avail.height() * 0.9), 240))
+        self.setMaximumWidth(avail.width())
+
     # ---- 拖动窗口（按住空白处拖动） ----
     def mousePressEvent(self, event) -> None:
         if event.button() == Qt.LeftButton:
             self._drag_offset = event.globalPosition().toPoint() - self.frameGeometry().topLeft()
+            # 拖动期间锁定尺寸：防止 Win11 贴靠/跨屏 DPI 在屏幕边界处把窗口放大
+            self._drag_size = self.size()
+            self.setFixedSize(self._drag_size)
 
     def mouseMoveEvent(self, event) -> None:
         if self._drag_offset is not None and event.buttons() & Qt.LeftButton:
@@ -194,6 +208,12 @@ class MiniWindow(QWidget):
 
     def mouseReleaseEvent(self, event) -> None:
         self._drag_offset = None
+        if self._drag_size is not None:
+            size = self._drag_size
+            self._drag_size = None
+            self.setMinimumSize(240, 240)
+            self._apply_screen_limits()
+            self.resize(min(size.width(), self.maximumWidth()), min(size.height(), self.maximumHeight()))
 
     # ---- 状态与内容 ----
     def set_state(self, state: str) -> None:
@@ -252,6 +272,9 @@ class MiniWindow(QWidget):
         if not restore_geometry("mini", self):
             screen = QGuiApplication.primaryScreen().geometry()
             self.move(screen.right() - MINI_W - 40, screen.top() + (screen.height() - MINI_H) // 2)
+        self._apply_screen_limits()
+        if self.height() > self.maximumHeight():
+            self.resize(self.width(), self.maximumHeight())
         self.show()
         self.raise_()
 
