@@ -76,7 +76,7 @@ QListWidget {
     background: #ffffff; border: 1px solid #eceef1; border-radius: 12px; padding: 2px;
 }
 QListWidget::item { border-bottom: 1px solid #f4f5f7; }
-QListWidget::item:selected { background: transparent; }
+QListWidget::item:selected { background: #eef1f4; color: #17181c; }
 #wordRow { background: transparent; border-radius: 8px; }
 #wordRow:hover { background: #f7f8fa; }
 
@@ -251,7 +251,7 @@ class _RowBase(QWidget):
         tl = self.trans_label
         if tl.width() > 0:
             h += tl.heightForWidth(tl.width())
-        return max(h, 48)
+        return max(h + 8, 48)  # +8 缓冲：字体渲染波动时避免释义底部被裁
 
 
 class WordRow(_RowBase):
