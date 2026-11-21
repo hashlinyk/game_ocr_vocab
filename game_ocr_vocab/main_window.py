@@ -308,7 +308,7 @@ class WindowPickerDialog(QDialog):
 
 class MainWindow(QMainWindow):
     def __init__(self, store, tts, on_region_selected, dict_ref: Dictionary,
-                 on_toggle_pause=None, on_pick_window=None, on_start=None, on_clear_list=None):
+                 on_toggle_pause=None, on_pick_window=None, on_start=None):
         super().__init__()
         self.store = store
         self.tts = tts
@@ -317,7 +317,6 @@ class MainWindow(QMainWindow):
         self._on_toggle_pause = on_toggle_pause
         self._on_pick_window = on_pick_window
         self._on_start = on_start
-        self._on_clear_list = on_clear_list
         self._start_ready = False
         self._new_words = 0
         self._vocab_dirty = {"mastered", "vocab"}  # 词库数据变化标记，切入 tab 时才刷新
@@ -411,6 +410,7 @@ class MainWindow(QMainWindow):
 
     def set_window_text(self, title: str) -> None:
         self.region_label.setText(f"窗口: {title}")
+        self.region_label.setVisible(True)  # 选中目标后展示窗口名
 
     def set_pinned(self, checked: bool) -> None:
         self.titlebar.pin_btn.setChecked(checked)
@@ -566,8 +566,6 @@ class MainWindow(QMainWindow):
     def _clear_list(self) -> None:
         self.list.clear()
         self.store.reset_shown()
-        if self._on_clear_list is not None:
-            self._on_clear_list()  # 重置 OCR 预筛并强制下一帧识别，未掌握的词会重新追加
 
     def _mark_all_mastered(self, include_vocab: bool = True) -> None:
         n = 0
@@ -748,6 +746,7 @@ class MainWindow(QMainWindow):
     def set_region_text(self, region: tuple) -> None:
         l, t, r, b = region
         self.region_label.setText(f"区域 ({l},{t})-({r},{b})  {r - l}x{b - t}")
+        self.region_label.setVisible(True)
         self.statusBar().showMessage(f"已开始监视区域 {region}", 5000)
 
     def show_error(self, msg: str) -> None:
