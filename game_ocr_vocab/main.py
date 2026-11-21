@@ -107,7 +107,11 @@ def main() -> int:
     def open_settings() -> None:
         from .settings_dialog import SettingsDialog
 
+        manager.suspend()  # 录制期间注销全局热键，避免组合被抢占
         SettingsDialog(manager, win).exec()
+        failed = manager.resume()  # 关闭后按新配置重新注册
+        if failed:
+            win.show_error("快捷键注册失败：" + "；".join(failed))
 
     main_dict = Dictionary()
     win = MainWindow(

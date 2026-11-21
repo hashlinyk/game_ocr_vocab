@@ -111,19 +111,12 @@ class SettingsDialog(QDialog):
         return page
 
     def _apply(self) -> None:
-        failed = []
         for slug, (edit, state) in self._editors.items():
             parsed = _seq_to_qt(edit.keySequence())
             if parsed is None:
                 continue  # 未修改或无效（无修饰键）的跳过
             mods, vk = parsed
-            display = self.manager.bindings()[slug][0]
-            if self.manager.rebind(slug, mods, vk):
-                state.setText(f"当前: {format_hotkey(mods, vk)}")
-            else:
-                failed.append(display)
-        if failed:
-            QMessageBox.warning(
-                self, "快捷键注册失败",
-                "以下快捷键被其他程序占用，已恢复原组合：\n" + "\n".join(failed),
-            )
+            # 设置窗口打开期间热键处于 suspend 状态，这里只保存配置；
+            # 关闭窗口时由 manager.resume() 统一注册并报告被占用的组合
+            self.manager.rebind(slug, mods, vk, register=False)
+            state.setText(f"当前: {format_hotkey(mods, vk)}")

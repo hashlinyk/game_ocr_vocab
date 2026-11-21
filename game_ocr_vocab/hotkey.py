@@ -79,11 +79,16 @@ class HotkeyManager:
         self._binding[slug] = (mods, vk)
         return False
 
-    def rebind(self, slug: str, mods: int, vk: int) -> bool:
-        """换绑；失败（被占用等）自动恢复原组合。"""
+    def rebind(self, slug: str, mods: int, vk: int, register: bool = True) -> bool:
+        """换绑并持久化。register=False 时只保存配置不注册（设置窗口 suspend 期间用）。"""
         if slug not in self._defs:
             return False
         hid, _display, _dm, _dv, cb = self._defs[slug]
+        if not register:
+            self._binding[slug] = (mods, vk)
+            self._saved[slug] = [mods, vk]
+            self._save()
+            return True
         old = self._binding.get(slug)
         self._unregister(hid)
         if self._register(hid, mods, vk, cb):
@@ -95,6 +100,29 @@ class HotkeyManager:
             if self._register(hid, old[0], old[1], cb):
                 self._binding[slug] = old
         return False
+
+    def suspend(self) -> None:
+        """临时注销全部热键（设置窗口录制按键期间，避免组合被全局热键抢占）。"""
+        for slug, d in self._defs.items():
+            self._unregister(d[0])
+
+    def resume(self) -> list[str]:
+        """按当前配置重新注册全部热键；返回注册失败的「功能名（组合）」列表。"""
+        failed = []
+        for slug, (hid, display, dm, dv, cb) in self._defs.items():
+            self._unregister(hid)
+            mods, vk = self._saved.get(slug, [dm, dv])
+            if self._register(hid, mods, vk, cb):
+                self._binding[slug] = (mods, vk)
+                continue
+            if self._register(hid, dm, dv, cb):
+                self._binding[slug] = (dm, dv)
+                self._saved[slug] = [dm, dv]
+                self._save()
+                failed.append(f"{display}（{format_hotkey(mods, vk)} 被占用，已回退默认）")
+            else:
+                failed.append(f"{display}（{format_hotkey(mods, vk)} 与默认均不可用）")
+        return failed
 
     def bindings(self) -> dict[str, tuple[str, int, int]]:
         """slug -> (功能名, mods, vk)。"""
