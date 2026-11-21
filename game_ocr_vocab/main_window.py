@@ -351,12 +351,6 @@ class MainWindow(QMainWindow):
         vbox.addLayout(inner)
         QSizeGrip(self)  # 无边框窗口右下角拖拽调整大小
 
-        # debug 帧清理：主线程定时执行（捕获线程只写帧，避免并发删除竞争）
-        cleanup_timer = QTimer(self)
-        cleanup_timer.timeout.connect(self._cleanup_debug_frames)
-        cleanup_timer.start(60_000)
-        QTimer.singleShot(5_000, self._cleanup_debug_frames)
-
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_stream_tab(), "识别")
         self.tabs.addTab(self._build_vocab_tab("mastered"), "已掌握")
