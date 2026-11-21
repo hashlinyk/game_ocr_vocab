@@ -52,10 +52,10 @@ def main() -> int:
     ocr_worker = OcrWorker(source, store)
     ocr_thread = _start_thread(ocr_worker)
 
-    def on_region_selected(region: tuple) -> None:
+    def on_region_selected(output_idx: int, region: tuple) -> None:
         ocr_worker.reset_snap()
         capture_worker.set_paused(False)
-        capture_worker.set_region(region)
+        capture_worker.set_region(region, output_idx=output_idx)
         win.set_region_text(region)
         win.set_run_state("running")
 

@@ -59,6 +59,8 @@ class CaptureWorker(QObject):
         self._pending = False
         self._frame_no = 0
         self._paused = False
+        self._output_idx: int | None = None
+        self._camera_dirty = False
 
     def set_paused(self, paused: bool) -> None:
         """暂停/恢复识别：区域保持不变，暂停期间不抓帧不触发 OCR。"""
@@ -67,11 +69,15 @@ class CaptureWorker(QObject):
             self._prev = None
             self._force_next = True  # 恢复后首帧直接识别，避免漏掉暂停期间的内容
 
-    def set_region(self, region: tuple[int, int, int, int] | None) -> None:
+    def set_region(self, region: tuple[int, int, int, int] | None, output_idx: int = 0) -> None:
         with self._region_lock:
             self._region = region
+            output_changed = self._output_idx != output_idx
+            self._output_idx = output_idx
         self._prev = None
         self._force_next = True  # 新区域首帧直接触发 OCR
+        if output_changed:
+            self._camera_dirty = True  # dxcam 相机绑定输出，切换屏幕需重建
 
     def stop(self) -> None:
         self._running = False
@@ -102,7 +108,8 @@ class CaptureWorker(QObject):
     def _create_camera(self):
         import dxcam
 
-        return dxcam.create(output_color="RGB", backend="dxgi")
+        output_idx = self._output_idx or 0
+        return dxcam.create(output_color="RGB", backend="dxgi", output_idx=output_idx)
 
     def run(self) -> None:
         self._running = True
@@ -110,6 +117,16 @@ class CaptureWorker(QObject):
         fail_streak = 0
         rebuilt = False
         while self._running:
+            if camera is not None and self._camera_dirty:
+                # 切换屏幕：dxcam 相机绑定输出设备，必须重建
+                try:
+                    camera.release()
+                except Exception:
+                    pass
+                camera = None
+                self._camera_dirty = False
+                fail_streak = 0
+                rebuilt = False
             if camera is None:
                 try:
                     camera = self._create_camera()

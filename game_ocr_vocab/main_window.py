@@ -258,7 +258,7 @@ class MainWindow(QMainWindow):
         inner.setContentsMargins(10, 8, 10, 8)
         inner.setSpacing(8)
         top = QHBoxLayout()
-        pick_btn = QPushButton("框选区域")
+        pick_btn = QPushButton("框选识别区域")
         pick_btn.clicked.connect(self._pick_region)
         self.state_label = QLabel("未开始识别")
         self.state_label.setStyleSheet("color: #999999; font-weight: bold;")
@@ -517,11 +517,19 @@ class MainWindow(QMainWindow):
         from .region_picker import RegionPicker
 
         self._picker = RegionPicker()
-        self._picker.setAttribute(Qt.WA_DeleteOnClose)
-        self._picker.regionSelected.connect(self._on_region_selected)
-        self._picker.showFullScreen()
-        self._picker.raise_()
-        self._picker.activateWindow()
+        self._picker.regionSelected.connect(self._on_region_picked)
+        self._picker.cancelled.connect(self._on_region_cancelled)
+        self.hide()  # 主窗口临时隐藏，避免遮挡待框选区域
+        self._picker.show()
+
+    def _on_region_picked(self, output_idx: int, region: tuple) -> None:
+        self.show()
+        self.raise_()
+        self._on_region_selected(output_idx, region)
+
+    def _on_region_cancelled(self) -> None:
+        self.show()
+        self.raise_()
 
     def _update_counts(self) -> None:
         m, v = self.store.counts()
