@@ -499,6 +499,9 @@ class MainWindow(QMainWindow):
     def _mark(self, canonical: str, status: str):
         def handler(canonical: str) -> None:
             self.store.set_status(canonical, status)
+            if status == "vocab":
+                # 生词本中的词每次画面出现都要重新提示（带「生」标记），清除已展示记录
+                self.store.reset_shown_word(canonical)
             self.remove_word(canonical)
             self._update_counts()
         return handler
