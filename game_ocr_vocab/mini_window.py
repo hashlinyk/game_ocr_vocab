@@ -12,10 +12,11 @@ from PySide6.QtWidgets import (
     QListWidget,
     QListWidgetItem,
     QPushButton,
-    QSizeGrip,
     QVBoxLayout,
     QWidget,
 )
+
+from .ui_widgets import ResizeHandle
 
 MINI_W = 340
 MINI_H = 520
@@ -122,7 +123,7 @@ class MiniWindow(QWidget):
         self.setStyleSheet(CARD_QSS)
         self.setMinimumSize(240, 240)
         self.resize(MINI_W, MINI_H)
-        QSizeGrip(self)  # 右下角拖拽调整大小
+        self._resize_handle = ResizeHandle(self)  # 无边框窗口自绘调整手柄
 
         outer = QVBoxLayout(self)
         outer.setContentsMargins(10, 10, 10, 10)
@@ -177,6 +178,10 @@ class MiniWindow(QWidget):
             return
         inside = self.frameGeometry().contains(QCursor.pos())
         self._apply_card_bg(CARD_BG_HOVER if inside else CARD_BG_IDLE)
+
+    def resizeEvent(self, event) -> None:
+        super().resizeEvent(event)
+        self._resize_handle.reposition()
 
     # ---- 拖动窗口（按住空白处拖动） ----
     def mousePressEvent(self, event) -> None:

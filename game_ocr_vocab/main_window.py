@@ -13,12 +13,13 @@ from PySide6.QtWidgets import (
     QMainWindow,
     QMessageBox,
     QPushButton,
-    QSizeGrip,
     QStyle,
     QTabWidget,
     QVBoxLayout,
     QWidget,
 )
+
+from .ui_widgets import ResizeHandle
 
 from .dictionary import Dictionary, WordEntry
 
@@ -413,7 +414,7 @@ class MainWindow(QMainWindow):
         top.addWidget(self.count_label)
         inner.addLayout(top)
         vbox.addLayout(inner)
-        QSizeGrip(self)  # 无边框窗口右下角拖拽调整大小
+        self._resize_handle = ResizeHandle(self)  # 无边框窗口自绘调整手柄
 
         self.tabs = QTabWidget()
         self.tabs.addTab(self._build_stream_tab(), "识别")
@@ -593,6 +594,8 @@ class MainWindow(QMainWindow):
 
     def resizeEvent(self, event) -> None:
         super().resizeEvent(event)
+        if getattr(self, "_resize_handle", None) is not None:
+            self._resize_handle.reposition()
         idx = self.tabs.currentIndex()
         lw = self.list if idx == 0 else (self.list_m if idx == 1 else self.list_v)
         QTimer.singleShot(0, lambda: self._fit_heights(lw))
