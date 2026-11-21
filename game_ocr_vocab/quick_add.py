@@ -59,7 +59,6 @@ class QuickAddDialog(QDialog):
         lay.addWidget(self.listw)
         outer.addWidget(card)
         self.setFixedWidth(CARD_W + 36)
-        self._entries: list[str] = []  # canonical 列表（与行对应）
         self._prev_hwnd: int | None = None
 
     # ---- 按键处理 ----
@@ -125,15 +124,24 @@ class QuickAddDialog(QDialog):
         self.activateWindow()
         self.edit.setFocus()
 
+    def _add_entry(self, text: str, canonical: str | None) -> None:
+        item = QListWidgetItem(text)
+        if canonical is None:  # 分组标题行：不可选
+            item.setData(Qt.UserRole, None)
+            item.setFlags(Qt.NoItemFlags)
+        else:
+            item.setData(Qt.UserRole, canonical)
+        self.listw.addItem(item)
+
     def _refill(self, kw: str) -> None:
         from .main_window import WordRow
 
         self.listw.clear()
-        self._entries = []
         kw = kw.strip().lower()
         seen: set[str] = set()
 
-        # 1) 识别区匹配（优先展示，可带生词标记）
+        # 1) 识别区匹配（排在最前，可带生词标记）
+        stream_hit = 0
         for i in range(self._win.list.count()):
             row = self._win.list.itemWidget(self._win.list.item(i))
             if not isinstance(row, WordRow):
@@ -144,27 +152,37 @@ class QuickAddDialog(QDialog):
                 continue
             tag = " · 生" if row.in_vocab else ""
             seen.add(row.canonical)
-            self._entries.append(row.canonical)
-            self.listw.addItem(QListWidgetItem(f"{word}{tag}    {trans[:60]}"))
+            stream_hit += 1
+            self._add_entry(f"{word}{tag}    {trans[:60]}", row.canonical)
 
-        # 2) 全词典前缀检索（含识别区中未出现的词）
+        # 2) 全词典前缀检索（排在识别区结果之后）
+        dict_hits: list[tuple[str, str]] = []
         if kw and self._win.dict is not None:
             for word, trans in self._win.dict.search_prefix(kw):
                 if word in seen:
                     continue
                 seen.add(word)
-                self._entries.append(word)
-                self.listw.addItem(QListWidgetItem(f"{word}    {trans[:60]}"))
+                dict_hits.append((word, trans))
+        if dict_hits:
+            if stream_hit:
+                self._add_entry("── 词典 ──", None)  # 分组分隔
+            for word, trans in dict_hits:
+                self._add_entry(f"{word}    {trans[:60]}", word)
 
-        if self.listw.count():
-            self.listw.setCurrentRow(0)
+        # 默认选中第一条可选词条
+        for i in range(self.listw.count()):
+            if self.listw.item(i).data(Qt.UserRole):
+                self.listw.setCurrentRow(i)
+                break
         if self.isVisible():
             self.adjustSize()
 
     def _commit_current(self) -> None:
-        row = self.listw.currentRow()
-        if row < 0 or row >= len(self._entries):
+        item = self.listw.currentItem()
+        if item is None:
             return
-        canonical = self._entries[row]
+        canonical = item.data(Qt.UserRole)
+        if not canonical:
+            return
         self._win.add_to_vocab(canonical)
         self._dismiss()
